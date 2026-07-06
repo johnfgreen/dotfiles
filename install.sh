@@ -15,7 +15,6 @@ DRY_RUN="${1:-}"
 LINKS=(
   "config/aerospace/aerospace.toml:.config/aerospace/aerospace.toml"
   "config/ghostty/config:.config/ghostty/config"
-  "config/ghostty/config.ghostty:.config/ghostty/config.ghostty"
   "config/tmux/tmux.conf:.config/tmux/tmux.conf"
   "config/opencode/opencode.jsonc:.config/opencode/opencode.jsonc"
   "config/opencode/agents/system.md:.config/opencode/agents/system.md"
