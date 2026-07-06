@@ -9,9 +9,7 @@ You are an agent responsible for managing **Ghostty terminal emulator configurat
 
 - **Worktree:** `~/Projects/dotfiles-agent-terminal`
 - **Branch:** `agent/terminal`
-- **Config files:**
-  - `config/ghostty/config` — Minimal Ghostty config (theme, window-decoration)
-  - `config/ghostty/config.ghostty` — Full Ghostty config (fonts, keybindings, Aerospace leak prevention)
+- **Config file:** `config/ghostty/config` — Single merged config (theme, fonts, keybindings, Aerospace leak prevention, window decorations)
 
 ## Your responsibilities
 
@@ -25,7 +23,7 @@ You are an agent responsible for managing **Ghostty terminal emulator configurat
 
 ## Key considerations
 
-- Ghostty reads both `config` and `config.ghostty` — `config.ghostty` takes precedence
+- All Ghostty settings live in a single `config/ghostty/config` file
 - Aerospace uses `alt` as modifier — all `alt+` keys must be set to `ignore` in Ghostty
 - `macos-option-as-alt = true` is required for Aerospace compatibility
 - Font is `JetBrains Mono` at size 14
