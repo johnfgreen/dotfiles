@@ -1,0 +1,380 @@
+#!/usr/bin/env python3
+"""
+opencode-memory — Persistent memory for the opencode system agent.
+
+Usage:
+  opencode-memory status              Show current memory state
+  opencode-memory init                Initialize memory file if missing
+  opencode-memory add-task <desc>     Add a new objective (--priority high|medium|low)
+  opencode-memory update-task <id>    Update task status/notes (--status, --notes)
+  opencode-memory complete-task <id>  Mark task completed (--result "...")
+  opencode-memory add-note <text>     Add a context note
+  opencode-memory get-context         Print a compact summary for session restore
+  opencode-memory heartbeat           Update last_updated timestamp only
+  opencode-memory close               Finalize session (set last_session_end)
+  opencode-memory prune               Manually trim old completed tasks and notes
+                                 (limits: 100 tasks, 20 notes)
+                                 (env: OPCODE_MEMORY_MAX_COMPLETED / MAX_NOTES)
+  opencode-memory archive             Move all active objectives to completed (start fresh, keep history)
+  opencode-memory forget              Permanently delete all active objectives (no history kept)
+"""
+
+import json
+import os
+import sys
+import time
+from datetime import datetime, timezone
+
+MEMORY_PATH = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
+
+# Pruning limits (configurable via env vars)
+MAX_COMPLETED_TASKS = int(os.environ.get("OPCODE_MEMORY_MAX_COMPLETED", "100"))
+MAX_CONTEXT_NOTES = int(os.environ.get("OPCODE_MEMORY_MAX_NOTES", "20"))
+
+SHELL = {
+    "schema_version": 1,
+    "last_updated": "",
+    "session_count": 0,
+    "active_objectives": [],
+    "completed_tasks": [],
+    "context_notes": [],
+    "working_directory": os.path.expanduser("~"),
+    "last_session_end": "",
+}
+
+
+def _now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _load():
+    if not os.path.exists(MEMORY_PATH):
+        return dict(SHELL)
+    with open(MEMORY_PATH, "r") as f:
+        return json.load(f)
+
+
+def _prune(data, silent=False):
+    """Trim completed_tasks and context_notes to keep the file lean.
+    Returns (tasks_removed, notes_removed)."""
+    tasks_removed = 0
+    notes_removed = 0
+
+    completed = data.get("completed_tasks", [])
+    if len(completed) > MAX_COMPLETED_TASKS:
+        tasks_removed = len(completed) - MAX_COMPLETED_TASKS
+        data["completed_tasks"] = completed[-MAX_COMPLETED_TASKS:]
+
+    notes = data.get("context_notes", [])
+    if len(notes) > MAX_CONTEXT_NOTES:
+        notes_removed = len(notes) - MAX_CONTEXT_NOTES
+        data["context_notes"] = notes[-MAX_CONTEXT_NOTES:]
+
+    if (tasks_removed or notes_removed) and not silent:
+        parts = []
+        if tasks_removed:
+            parts.append(f"{tasks_removed} old completed task(s)")
+        if notes_removed:
+            parts.append(f"{notes_removed} old note(s)")
+        print(f"Pruned: {' and '.join(parts)} (max {MAX_COMPLETED_TASKS} tasks, {MAX_CONTEXT_NOTES} notes)")
+
+    return tasks_removed, notes_removed
+
+
+def _save(data):
+    data["last_updated"] = _now()
+    with open(MEMORY_PATH, "w") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+
+def _next_id(data):
+    objs = data.get("active_objectives", []) + data.get("completed_tasks", [])
+    existing = set()
+    for o in objs:
+        oid = o.get("id", "")
+        if oid.startswith("obj-"):
+            try:
+                existing.add(int(oid[4:]))
+            except ValueError:
+                pass
+    n = 1
+    while n in existing:
+        n += 1
+    return f"obj-{n:03d}"
+
+
+def cmd_status(data, args=None):
+    print("=== opencode Memory ===")
+    print(f"Session count: {data.get('session_count', 0)}")
+    print(f"Last updated:  {data.get('last_updated', 'never')}")
+    print(f"Last session:  {data.get('last_session_end', 'never')}")
+    print(f"Limits:        {MAX_COMPLETED_TASKS} max completed tasks, {MAX_CONTEXT_NOTES} max notes")
+    objs = data.get("active_objectives", [])
+    if objs:
+        print(f"\nActive objectives ({len(objs)}):")
+        for o in objs:
+            status = o.get("status", "unknown")
+            pri = o.get("priority", "medium")
+            notes = o.get("notes", "")
+            note_str = f" — {notes}" if notes else ""
+            print(f"  [{status}] ({pri}) {o.get('id', '?')}: {o.get('description', '?')}{note_str}")
+    else:
+        print("\nNo active objectives.")
+    notes = data.get("context_notes", [])
+    if notes:
+        print(f"\nContext notes ({len(notes)}):")
+        for n in notes:
+            print(f"  • {n}")
+    done = data.get("completed_tasks", [])
+    if done:
+        print(f"\nCompleted this session: {len(done)}")
+
+
+def cmd_init(data, args=None):
+    if os.path.exists(MEMORY_PATH):
+        print("Memory file already exists.")
+    else:
+        _save(dict(SHELL))
+        print("Initialized memory file.")
+
+
+def cmd_add_task(data, args):
+    if not args:
+        print("Error: provide a task description.")
+        sys.exit(1)
+    priority = "medium"
+    desc_parts = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--priority" and i + 1 < len(args):
+            priority = args[i + 1]
+            i += 2
+        else:
+            desc_parts.append(args[i])
+            i += 1
+    desc = " ".join(desc_parts)
+    if priority not in ("high", "medium", "low"):
+        priority = "medium"
+    oid = _next_id(data)
+    task = {
+        "id": oid,
+        "description": desc,
+        "status": "pending",
+        "priority": priority,
+        "created": _now(),
+        "notes": "",
+    }
+    data.setdefault("active_objectives", []).append(task)
+    _save(data)
+    print(f"Added task {oid}: [{priority}] {desc}")
+
+
+def cmd_update_task(data, args):
+    if not args:
+        print("Error: provide a task id.")
+        sys.exit(1)
+    tid = args[0]
+    rest = args[1:]
+
+    status_val = None
+    notes_val = None
+    new_args = []
+    i = 0
+    while i < len(rest):
+        if rest[i] == "--status" and i + 1 < len(rest):
+            status_val = rest[i + 1]
+            i += 2
+        elif rest[i] == "--notes" and i + 1 < len(rest):
+            notes_val = rest[i + 1]
+            i += 2
+        else:
+            new_args.append(rest[i])
+            i += 1
+
+    objs = data.get("active_objectives", [])
+    found = None
+    for o in objs:
+        if o.get("id") == tid:
+            found = o
+            break
+    if not found:
+        # Check completed tasks too
+        for o in data.get("completed_tasks", []):
+            if o.get("id") == tid:
+                found = o
+                break
+    if not found:
+        print(f"Error: no task with id '{tid}'.")
+        sys.exit(1)
+
+    if status_val:
+        found["status"] = status_val
+    if notes_val:
+        found["notes"] = notes_val
+
+    _save(data)
+    print(f"Updated {tid}: status={status_val or 'unchanged'}, notes={notes_val or 'unchanged'}")
+
+
+def cmd_complete_task(data, args):
+    if not args:
+        print("Error: provide a task id.")
+        sys.exit(1)
+    tid = args[0]
+    rest = args[1:]
+    result = None
+    if "--result" in rest:
+        idx = rest.index("--result")
+        try:
+            result = " ".join(rest[idx + 1:])
+            rest = rest[:idx]
+        except IndexError:
+            pass
+
+    objs = data.get("active_objectives", [])
+    found = None
+    for i, o in enumerate(objs):
+        if o.get("id") == tid:
+            found = objs.pop(i)
+            break
+    if not found:
+        print(f"Error: no active task with id '{tid}'.")
+        sys.exit(1)
+
+    found["status"] = "completed"
+    completed_entry = {
+        "id": found["id"],
+        "summary": found["description"],
+        "completed": _now(),
+        "result": result or "",
+    }
+    data.setdefault("completed_tasks", []).append(completed_entry)
+    _save(data)
+    print(f"Completed {tid}: {found['description']}")
+
+
+def cmd_add_note(data, args):
+    if not args:
+        print("Error: provide note text.")
+        sys.exit(1)
+    note = " ".join(args)
+    data.setdefault("context_notes", []).append(note)
+    _save(data)
+    print(f"Added note: {note}")
+
+
+def cmd_get_context(data, args=None):
+    """Print a compact context block for the agent to restore from."""
+    objs = data.get("active_objectives", [])
+    active = [o for o in objs if o.get("status") in ("in_progress", "pending")]
+    if not active:
+        print("No active objectives.")
+        return
+    for o in active:
+        pri = o.get("priority", "medium")
+        notes = o.get("notes", "")
+        note_str = f" — {notes}" if notes else ""
+        print(f"[{o['status']}] ({pri}) {o['description']}{note_str}")
+
+
+def cmd_heartbeat(data, args=None):
+    _prune(data)
+    _save(data)
+    print(f"Heartbeat: {data['last_updated']}")
+
+
+def cmd_archive(data, args=None):
+    """Move all active objectives to completed_tasks (start fresh, keep history)."""
+    objs = data.get("active_objectives", [])
+    if not objs:
+        print("No active objectives to archive.")
+        return
+    now = _now()
+    count = 0
+    for o in objs:
+        entry = {
+            "id": o.get("id", "?"),
+            "summary": o.get("description", "?"),
+            "completed": now,
+            "result": "Archived on session reset",
+        }
+        data.setdefault("completed_tasks", []).append(entry)
+        count += 1
+    data["active_objectives"] = []
+    _save(data)
+    print(f"Archived {count} objective(s) to history. Ready for a fresh start.")
+
+
+def cmd_forget(data, args=None):
+    """Permanently delete all active objectives (no history kept)."""
+    objs = data.get("active_objectives", [])
+    if not objs:
+        print("No active objectives to forget.")
+        return
+    count = len(objs)
+    data["active_objectives"] = []
+    _save(data)
+    print(f"Forgot {count} objective(s). They're gone permanently.")
+
+
+def cmd_prune(data, args=None):
+    pruned_tasks, pruned_notes = _prune(data, silent=False)
+    if pruned_tasks or pruned_notes:
+        _save(data)
+    else:
+        print(f"Nothing to prune (under limits: {MAX_COMPLETED_TASKS} tasks, {MAX_CONTEXT_NOTES} notes)")
+
+
+def cmd_close(data, args=None):
+    data["last_session_end"] = _now()
+    data["session_count"] = data.get("session_count", 0) + 1
+    pruned_tasks, pruned_notes = _prune(data)
+    _save(data)
+    objs = data.get("active_objectives", [])
+    active = [o for o in objs if o.get("status") in ("in_progress", "pending")]
+    summary = f"Session closed. {len(active)} objectives remain."
+    if pruned_tasks or pruned_notes:
+        parts = []
+        if pruned_tasks:
+            parts.append(f"{pruned_tasks} old task(s) archived")
+        if pruned_notes:
+            parts.append(f"{pruned_notes} old note(s) archived")
+        summary += f" ({'; '.join(parts)})"
+    print(summary)
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__.strip())
+        sys.exit(1)
+
+    data = _load()
+    cmd = sys.argv[1]
+    args = sys.argv[2:]
+
+    commands = {
+        "status": cmd_status,
+        "init": cmd_init,
+        "add-task": cmd_add_task,
+        "update-task": cmd_update_task,
+        "complete-task": cmd_complete_task,
+        "add-note": cmd_add_note,
+        "get-context": cmd_get_context,
+        "heartbeat": cmd_heartbeat,
+        "close": cmd_close,
+        "prune": cmd_prune,
+        "archive": cmd_archive,
+        "forget": cmd_forget,
+    }
+
+    if cmd not in commands:
+        print(f"Unknown command: {cmd}")
+        print(__doc__.strip())
+        sys.exit(1)
+
+    commands[cmd](data, args)
+
+
+if __name__ == "__main__":
+    main()

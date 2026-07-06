@@ -1,0 +1,133 @@
+# =============================================================================
+# Ghostty Configuration
+# ~/.config/ghostty/config.ghostty
+# =============================================================================
+# Reload config at runtime: cmd+shift+,
+# See full reference: https://ghostty.org/docs/config/reference
+# =============================================================================
+
+# --- Theme (Catppuccin Mocha) ---
+# A popular dark theme. Change to your preference.
+theme = "Catppuccin Mocha"
+
+# --- Font ---
+font-family = "JetBrains Mono"
+font-size = 14
+font-feature = calt
+font-feature = liga
+
+# --- Window ---
+background-opacity = 0.95
+window-padding-x = 8
+window-padding-y = 4
+macos-titlebar-style = "tabs"
+macos-titlebar-proxy-icon = "hidden"
+
+# --- Shell ---
+# Use the default shell (zsh on macOS). You can override if needed:
+# command = /bin/zsh
+
+# --- Cursor ---
+cursor-style = "bar"
+cursor-style-blink = true
+
+# --- Mouse ---
+mouse-hide-while-typing = true
+
+# --- Option (Alt) Key Handling ---
+# Aerospace uses `alt` (Option) as its primary modifier, which creates a
+# conflict: Ghostty and Aerospace both want the Option key.
+#
+# Strategy:
+#   macos-option-as-alt = true
+#     Makes Option act as Meta (Escape+key) instead of sending Unicode chars.
+#     So if a key DOES leak through, the shell gets "\ez" instead of "Ω".
+#     The shell echoes "z" harmlessly instead of inserting a weird Unicode glyph.
+#     ⚠ REQUIRES A FULL RESTART OF GHOSTTY — config reload isn't enough.
+#
+#   macos-auto-secure-input = false
+#     Prevents Ghostty from grabbing exclusive keyboard access, so Aerospace
+#     can still intercept alt+key combos via Accessibility APIs.
+#
+#   Explicit keybind = alt+...=ignore for every key Aerospace uses.
+#     This is the only bulletproof way to block leaks while preserving shell
+#     shortcuts like alt+b/f/d (backward/forward word in zsh).
+
+macos-auto-secure-input = false
+macos-option-as-alt = true
+
+# --- Keybindings ---
+# These use `cmd` (Command) / `ctrl` (Control) — no conflict with Aerospace.
+
+# Copy / Paste (macOS conventions)
+keybind = cmd+c=copy_to_clipboard
+keybind = cmd+v=paste_from_clipboard
+
+# Font size adjustments
+keybind = ctrl+plus=increase_font_size:1
+keybind = ctrl+minus=decrease_font_size:1
+keybind = ctrl+0=reset_font_size
+
+# Split management
+keybind = cmd+d=new_split:right
+keybind = cmd+shift+d=new_split:down
+
+# Tab management
+keybind = cmd+t=new_tab
+keybind = cmd+w=close_surface
+
+# Reload config
+keybind = cmd+shift+,=reload_config
+
+# Toggle fullscreen
+keybind = ctrl+cmd+f=toggle_fullscreen
+
+# --- Aerospace Key Leak Prevention ---
+# Aerospace's mode.main bindings vs. Ghostty — each alt+key that Aerospace
+# claims must be `ignore`d in Ghostty so it doesn't leak to the terminal.
+# Shell shortcuts (alt+b/f/d) are left unbound so they pass through normally.
+
+# Focus: alt+h/j/k/l
+keybind = alt+h=ignore
+keybind = alt+j=ignore
+keybind = alt+k=ignore
+keybind = alt+l=ignore
+
+# Move: alt+shift+h/j/k/l
+keybind = alt+shift+h=ignore
+keybind = alt+shift+j=ignore
+keybind = alt+shift+k=ignore
+keybind = alt+shift+l=ignore
+
+# Resize: alt+minus / alt+equal
+keybind = alt+minus=ignore
+keybind = alt+equal=ignore
+
+# Workspace: alt+1..9
+keybind = alt+1=ignore
+keybind = alt+2=ignore
+keybind = alt+3=ignore
+keybind = alt+4=ignore
+keybind = alt+5=ignore
+keybind = alt+6=ignore
+keybind = alt+7=ignore
+keybind = alt+8=ignore
+keybind = alt+9=ignore
+
+# Move to workspace: alt+shift+1..9
+keybind = alt+shift+1=ignore
+keybind = alt+shift+2=ignore
+keybind = alt+shift+3=ignore
+keybind = alt+shift+4=ignore
+keybind = alt+shift+5=ignore
+keybind = alt+shift+6=ignore
+keybind = alt+shift+7=ignore
+keybind = alt+shift+8=ignore
+keybind = alt+shift+9=ignore
+
+# Other Aerospace: tab, slash, comma, semicolon
+keybind = alt+tab=ignore
+keybind = alt+shift+tab=ignore
+keybind = alt+slash=ignore
+keybind = alt+comma=ignore
+keybind = alt+shift+semicolon=ignore

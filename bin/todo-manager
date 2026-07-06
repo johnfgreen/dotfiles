@@ -1,0 +1,88 @@
+#!/bin/bash
+# todo-manager — sync todowrite tasks with persistent opencode-memory
+#
+# Call this from bash immediately after every todowrite call.
+# Usage:  todo-manager <command> [args...]
+#
+# Commands:
+#   add <desc> [--priority high|medium|low]
+#       Mirror of todowrite "add" — adds a task to opencode-memory.
+#
+#   complete <id> [--result "..."]
+#       Mirror of todowrite "completed" — marks a task done in opencode-memory.
+#
+#   update <id> --status in_progress|pending|completed [--notes "..."]
+#       Mirror of todowrite status change.
+#
+#   note <text>
+#       Save a context note (call after any noteworthy observation).
+#
+#   status
+#       Show current opencode-memory state.
+#
+#   heartbeat
+#       Persist current state (call after every meaningful milestone).
+#
+#   close
+#       Finalize session.
+
+MEMORY_TOOL="$(cd "$(dirname "$0")" && pwd)/opencode-memory"
+
+case "${1:-}" in
+  add)
+    shift
+    if [ $# -eq 0 ]; then
+      echo "Usage: todo-manager add <description> [--priority high|medium|low]" >&2
+      exit 1
+    fi
+    "$MEMORY_TOOL" add-task "$@"
+    ;;
+  complete|done)
+    shift
+    if [ $# -eq 0 ]; then
+      echo "Usage: todo-manager complete <id> [--result \"...\"]" >&2
+      exit 1
+    fi
+    "$MEMORY_TOOL" complete-task "$@"
+    ;;
+  update)
+    shift
+    if [ $# -eq 0 ]; then
+      echo "Usage: todo-manager update <id> --status in_progress|pending|completed [--notes \"...\"]" >&2
+      exit 1
+    fi
+    "$MEMORY_TOOL" update-task "$@"
+    ;;
+  note|add-note)
+    shift
+    if [ $# -eq 0 ]; then
+      echo "Usage: todo-manager note <text>" >&2
+      exit 1
+    fi
+    "$MEMORY_TOOL" add-note "$@"
+    ;;
+  status)
+    "$MEMORY_TOOL" status
+    ;;
+  heartbeat)
+    "$MEMORY_TOOL" heartbeat
+    ;;
+  close)
+    "$MEMORY_TOOL" close
+    ;;
+  *)
+    echo "todo-manager — sync todowrite tasks with persistent opencode-memory"
+    echo ""
+    echo "Usage: todo-manager <command> [args...]"
+    echo ""
+    echo "Commands:"
+    echo "  add <desc> [--priority high|medium|low]     Add a new task"
+    echo "  complete|done <id> [--result \"...\"]          Mark task completed"
+    echo "  update <id> --status <s> [--notes \"...\"]    Update task status"
+    echo "  note <text>                                  Save a context note"
+    echo "  status                                       Show memory state"
+    echo "  heartbeat                                    Persist checkpoint"
+    echo "  close                                        Finalize session"
+    exit 1
+    ;;
+esac

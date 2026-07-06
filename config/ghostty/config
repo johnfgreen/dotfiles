@@ -1,0 +1,3 @@
+# Ghostty configuration
+# Remove the window title bar / decorations
+window-decoration = false

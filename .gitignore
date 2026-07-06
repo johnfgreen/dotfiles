@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+*.swp
+*~
+
+# User-specific state (not config)
+config/opencode/agents/system-memory.json
+
+# Editor temp files
+*.bak
+*.tmp
+
+# OS metadata
+._*
