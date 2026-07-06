@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+#
+# worktree-session — Create or attach a tmux session for a git worktree.
+#
+# Usage:
+#   worktree-session list          # List available worktrees
+#   worktree-session open <name>   # Open tmux session for a worktree
+#   worktree-session kill <name>   # Kill the tmux session for a worktree
+#
+# Each worktree gets its own tmux session named after the worktree dir.
+# The session starts in the worktree root with the branch name in the status.
+#
+set -euo pipefail
+
+DOTFILES_DIR="$HOME/Projects/dotfiles"
+WORKTREES_DIR="$HOME/Projects"
+
+list_worktrees() {
+  echo "Available worktrees:"
+  echo ""
+  if [ ! -d "$DOTFILES_DIR" ]; then
+    echo "  (dotfiles repo not found at $DOTFILES_DIR)"
+    return 1
+  fi
+  cd "$DOTFILES_DIR"
+  git worktree list --porcelain | grep "^worktree " | while read -r line; do
+    wpath="${line#worktree }"
+    wname="$(basename "$wpath")"
+    wbranch="$(cd "$wpath" && git branch --show-current 2>/dev/null || echo "detached")"
+    # Check if tmux session exists
+    if tmux has-session -t "$wname" 2>/dev/null; then
+      echo "  📌 $wname  (branch: $wbranch)  [session running]"
+    else
+      echo "  ○ $wname  (branch: $wbranch)  [no session]"
+    fi
+  done
+}
+
+open_session() {
+  local name="$1"
+  local worktree_path=""
+
+  # Find the worktree path
+  if [ -d "$WORKTREES_DIR/$name" ]; then
+    worktree_path="$WORKTREES_DIR/$name"
+  else
+    # Search in git worktree list
+    worktree_path=$(cd "$DOTFILES_DIR" && git worktree list --porcelain | grep -A1 "branch.*/$name$" | grep "^worktree " | sed 's/^worktree //' || true)
+    if [ -z "$worktree_path" ]; then
+      echo "Error: no worktree found matching '$name'"
+      echo "Run '$0 list' to see available worktrees."
+      exit 1
+    fi
+  fi
+
+  local branch="$(cd "$worktree_path" && git branch --show-current 2>/dev/null || echo "detached")"
+
+  # Create or attach tmux session
+  if tmux has-session -t "$name" 2>/dev/null; then
+    echo "Attaching to existing tmux session '$name' (worktree: $branch)..."
+    if [ -n "${TMUX:-}" ]; then
+      # Already inside tmux — switch to it
+      tmux switch-client -t "$name"
+    else
+      tmux attach-session -t "$name"
+    fi
+  else
+    echo "Creating tmux session '$name' for worktree $branch..."
+    tmux new-session -d -s "$name" -c "$worktree_path" \; \
+      send-keys "echo \"=== Agent session: $name (branch: $branch) ===\"" Enter \; \
+      send-keys "cd $worktree_path" Enter \; \
+      rename-window "main"
+
+    # Add a second window for git/logs
+    tmux new-window -t "$name" -n "git" -c "$worktree_path" \; \
+      send-keys "git status" Enter
+
+    # Switch back to first window
+    tmux select-window -t "$name:1"
+
+    if [ -n "${TMUX:-}" ]; then
+      tmux switch-client -t "$name"
+    else
+      tmux attach-session -t "$name"
+    fi
+  fi
+}
+
+kill_session() {
+  local name="$1"
+  if tmux has-session -t "$name" 2>/dev/null; then
+    tmux kill-session -t "$name"
+    echo "Killed tmux session '$name'"
+  else
+    echo "No tmux session named '$name'"
+  fi
+}
+
+# --- Main ---
+case "${1:-help}" in
+  list)
+    list_worktrees
+    ;;
+  open)
+    if [ -z "${2:-}" ]; then
+      echo "Usage: $0 open <name>"
+      echo ""
+      list_worktrees
+      exit 1
+    fi
+    open_session "$2"
+    ;;
+  kill)
+    if [ -z "${2:-}" ]; then
+      echo "Usage: $0 kill <name>"
+      echo "Run '$0 list' to see active sessions."
+      exit 1
+    fi
+    kill_session "$2"
+    ;;
+  help|--help|-h)
+    echo "Usage: $0 <command> [name]"
+    echo ""
+    echo "Commands:"
+    echo "  list              Show worktrees and their tmux session status"
+    echo "  open    <name>    Create or attach tmux session for a worktree"
+    echo "  kill    <name>    Kill the tmux session for a worktree"
+    echo ""
+    echo "Examples:"
+    echo "  $0 list"
+    echo "  $0 open dotfiles-agent-tmux"
+    echo "  $0 kill dotfiles-agent-opencode"
+    ;;
+  *)
+    echo "Unknown command: $1"
+    echo "Usage: $0 list|open|kill"
+    exit 1
+    ;;
+esac
