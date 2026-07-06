@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+#
+# worktree-manager — Create and remove git worktrees with one command.
+# Works with the dotfiles repo's multi-agent workflow.
+#
+# Usage:
+#   worktree-manager add    <name> [branch]   # Create worktree from main
+#   worktree-manager remove <name>            # Delete worktree and branch
+#   worktree-manager list                     # List all worktrees (alias for wtsl)
+#
+# Examples:
+#   worktree-manager add terminal
+#   worktree-manager add agent-tmux agent/tmux   # custom branch name
+#   worktree-manager remove terminal
+#
+set -euo pipefail
+
+DOTFILES_DIR="$HOME/Projects/dotfiles"
+WORKTREES_DIR="$HOME/Projects"
+
+cmd_add() {
+  local name="$1"
+  local branch="${2:-agent/$name}"
+  local worktree_path="$WORKTREES_DIR/dotfiles-$name"
+
+  if [ -d "$worktree_path" ]; then
+    echo "Error: Worktree already exists at $worktree_path"
+    exit 1
+  fi
+
+  if git -C "$DOTFILES_DIR" show-ref --verify --quiet "refs/heads/$branch"; then
+    echo "Branch '$branch' already exists locally."
+  else
+    echo "Creating branch '$branch' from main..."
+    git -C "$DOTFILES_DIR" branch "$branch" main
+  fi
+
+  echo "Creating worktree at $worktree_path..."
+  git -C "$DOTFILES_DIR" worktree add "$worktree_path" "$branch"
+
+  # Push branch if it doesn't exist on remote
+  if ! git -C "$DOTFILES_DIR" ls-remote --exit-code origin "$branch" >/dev/null 2>&1; then
+    git -C "$DOTFILES_DIR" push origin "$branch"
+    echo "Pushed '$branch' to origin."
+  fi
+
+  # Set upstream tracking
+  git -C "$worktree_path" branch --set-upstream-to="origin/$branch" "$branch" 2>/dev/null || true
+
+  echo ""
+  echo "✅ Worktree '$name' ready at: $worktree_path  (branch: $branch)"
+  echo "   Start a tmux session: wtso dotfiles-$name"
+}
+
+cmd_remove() {
+  local name="$1"
+  local worktree_path="$WORKTREES_DIR/dotfiles-$name"
+
+  if [ ! -d "$worktree_path" ]; then
+    echo "Error: No worktree found at $worktree_path"
+    exit 1
+  fi
+
+  # Get the branch name from the worktree
+  local branch
+  branch=$(git -C "$DOTFILES_DIR" worktree list --porcelain | grep -A2 "worktree $worktree_path" | grep "^branch " | sed 's|^branch refs/heads/||' || echo "")
+
+  # Kill any tmux session for this worktree
+  local session_name
+  session_name="$(basename "$worktree_path")"
+  if tmux has-session -t "$session_name" 2>/dev/null; then
+    echo "Killing tmux session '$session_name'..."
+    tmux kill-session -t "$session_name"
+  fi
+
+  echo "Removing worktree at $worktree_path..."
+  git -C "$DOTFILES_DIR" worktree remove "$worktree_path"
+
+  if [ -n "$branch" ]; then
+    echo "Deleting local branch '$branch'..."
+    git -C "$DOTFILES_DIR" branch -d "$branch" 2>/dev/null || echo "  (not deleted — not fully merged)"
+
+    if git -C "$DOTFILES_DIR" ls-remote --exit-code origin "$branch" >/dev/null 2>&1; then
+      echo "Deleting remote branch '$branch'..."
+      git -C "$DOTFILES_DIR" push origin --delete "$branch"
+    fi
+  fi
+
+  git -C "$DOTFILES_DIR" worktree prune
+  echo "✅ Worktree '$name' removed."
+}
+
+cmd_list() {
+  "$WORKTREES_DIR/dotfiles/bin/worktree-session" list
+}
+
+# --- Main ---
+case "${1:-help}" in
+  add)
+    if [ -z "${2:-}" ]; then
+      echo "Usage: $0 add <name> [branch]"
+      echo "  name   — worktree name (creates ~/Projects/dotfiles-<name>)"
+      echo "  branch — branch name (default: agent/<name>)"
+      exit 1
+    fi
+    cmd_add "$2" "${3:-}"
+    ;;
+  remove|rm)
+    if [ -z "${2:-}" ]; then
+      echo "Usage: $0 remove <name>"
+      echo "  name — worktree name to remove"
+      exit 1
+    fi
+    cmd_remove "$2"
+    ;;
+  list|ls)
+    cmd_list
+    ;;
+  help|--help|-h)
+    echo "Usage: $0 {add|remove|list} [name] [branch]"
+    echo ""
+    echo "Commands:"
+    echo "  add    <name> [branch]   Create worktree from main"
+    echo "  remove <name>            Delete worktree, branch, and tmux session"
+    echo "  list                     Show all worktrees"
+    exit 0
+    ;;
+  *)
+    echo "Unknown command: $1"
+    echo "Usage: $0 add|remove|list"
+    exit 1
+    ;;
+esac
