@@ -22,6 +22,8 @@ LINKS=(
   "config/opencode/agents/agent-tmux.md:.config/opencode/agents/agent-tmux.md"
   "config/opencode/agents/agent-opencode.md:.config/opencode/agents/agent-opencode.md"
   "config/opencode/agents/agent-bootstrap.md:.config/opencode/agents/agent-bootstrap.md"
+  "config/opencode/agents/agent-terminal.md:.config/opencode/agents/agent-terminal.md"
+  "config/opencode/agents/agent-desktop.md:.config/opencode/agents/agent-desktop.md"
   "home/.gitconfig:.gitconfig"
   "home/.zshrc:.zshrc"
   "home/.zprofile:.zprofile"

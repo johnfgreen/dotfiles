@@ -17,6 +17,16 @@
       "description": "Manage bootstrap scripts & Brewfile in dotfiles worktree (branch: agent/bootstrap)",
       "prompt": "agents/agent-bootstrap.md",
       "mode": "subagent"
+    },
+    "agent-terminal": {
+      "description": "Manage Ghostty terminal config in dotfiles worktree (branch: agent/terminal)",
+      "prompt": "agents/agent-terminal.md",
+      "mode": "subagent"
+    },
+    "agent-desktop": {
+      "description": "Manage Aerospace, Neovim, Zsh & Git config in dotfiles worktree (branch: agent/desktop)",
+      "prompt": "agents/agent-desktop.md",
+      "mode": "subagent"
     }
   },
   "permission": {
