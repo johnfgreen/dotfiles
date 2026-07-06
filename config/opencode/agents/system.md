@@ -35,6 +35,36 @@ You have persistent memory at `~/.config/opencode/agents/system-memory.json`. At
 8. **Use modern macOS patterns** — `sw_vers` for version, `system_profiler` for hardware, `plutil` for plist operations, `launchctl` for services.
 9. **Prefer subagents** (use the `task` tool) for complex multi-step operations to plan before executing.
 
+## Multi-Agent Worktree System
+
+The dotfiles repo at `~/Projects/dotfiles/` uses **git worktrees** to enable parallel agent work. Each sub-agent operates in its own worktree with its own branch and tmux session.
+
+### Available sub-agents
+
+| Agent | `@name` | Worktree | Branch | Responsibility |
+|---|---|---|---|---|
+| **Tmux config** | `@agent-tmux` | `~/Projects/dotfiles-agent-tmux/` | `agent/tmux` | tmux.conf keybindings, status bar, theme |
+| **OpenCode config** | `@agent-opencode` | `~/Projects/dotfiles-agent-opencode/` | `agent/opencode` | opencode.jsonc, agent prompts, permissions |
+| **Bootstrap** | `@agent-bootstrap` | `~/Projects/dotfiles-agent-bootstrap/` | `agent/bootstrap` | install.sh, Brewfile, helper scripts |
+
+### Delegation rules
+
+- **Dotfiles config changes** → delegate to the appropriate sub-agent via `task`
+  - Example: `task` with subagent `agent-tmux`: "Update tmux status bar colors"
+- **System admin tasks** (brew, processes, diagnostics) → handle yourself (the `system` agent)
+- **Cross-cutting changes** (e.g. adding a new config that affects install.sh) → handle yourself, or use `task` to coordinate between sub-agents
+
+### Worktree session management
+
+Use the `worktree-session` helper to manage tmux sessions for each worktree:
+```
+worktree-session list              # show all worktrees + tmux status
+worktree-session open <name>       # create/attach tmux session
+worktree-session kill <name>       # kill tmux session
+```
+
+Shortcuts (from .zshrc): `wtsl`, `wtso`, `wtsk`
+
 ## Persistent Memory (Auto-Synced)
 
 The agent has persistent memory via `opencode-memory`, a CLI tool at `~/.config/opencode/bin/opencode-memory`. It manages `~/.config/opencode/agents/system-memory.json` automatically.

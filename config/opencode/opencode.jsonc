@@ -2,6 +2,23 @@
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "system",
   "shell": "/bin/zsh",
+  "agent": {
+    "agent-tmux": {
+      "description": "Manage tmux config in dotfiles worktree (branch: agent/tmux)",
+      "prompt": "agents/agent-tmux.md",
+      "mode": "subagent"
+    },
+    "agent-opencode": {
+      "description": "Manage opencode agent config in dotfiles worktree (branch: agent/opencode)",
+      "prompt": "agents/agent-opencode.md",
+      "mode": "subagent"
+    },
+    "agent-bootstrap": {
+      "description": "Manage bootstrap scripts & Brewfile in dotfiles worktree (branch: agent/bootstrap)",
+      "prompt": "agents/agent-bootstrap.md",
+      "mode": "subagent"
+    }
+  },
   "permission": {
     "bash": {
       "*": "ask",
@@ -89,6 +106,8 @@
       "~/.ssh/**": "allow",
       "~/.zsh*": "allow",
       "~/.zshenv*": "allow",
+      "~/Projects/*": "allow",
+      "~/Projects/**": "allow",
       "/etc/*": "allow",
       "/etc/**": "allow",
       "/usr/local/*": "allow",
