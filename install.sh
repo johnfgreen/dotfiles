@@ -19,6 +19,10 @@ LINKS=(
   "config/tmux/tmux.conf:.config/tmux/tmux.conf"
   "config/opencode/opencode.jsonc:.config/opencode/opencode.jsonc"
   "config/opencode/agents/system.md:.config/opencode/agents/system.md"
+  "config/opencode/agents/agent-tmux.md:.config/opencode/agents/agent-tmux.md"
+  "config/opencode/agents/agent-opencode.md:.config/opencode/agents/agent-opencode.md"
+  "config/opencode/agents/agent-bootstrap.md:.config/opencode/agents/agent-bootstrap.md"
+  "home/.gitconfig:.gitconfig"
   "home/.zshrc:.zshrc"
   "home/.zprofile:.zprofile"
 )

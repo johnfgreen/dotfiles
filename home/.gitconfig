@@ -1,0 +1,7 @@
+[init]
+	defaultBranch = main
+[pull]
+	rebase = true
+[user]
+	name = John Green
+	email = john@jfranklingreen.com
