@@ -21,6 +21,9 @@ LINKS=(
   "config/opencode/agents/agent-opencode.md:.config/opencode/agents/agent-opencode.md"
   "config/opencode/agents/agent-bootstrap.md:.config/opencode/agents/agent-bootstrap.md"
   "config/opencode/agents/agent-desktop.md:.config/opencode/agents/agent-desktop.md"
+  # opencode memory tools (state file is gitignored — recreated fresh)
+  "bin/opencode-memory:.config/opencode/bin/opencode-memory"
+  "bin/todo-manager:.config/opencode/bin/todo-manager"
   "home/.gitconfig:.gitconfig"
   "home/.zshrc:.zshrc"
   "home/.zprofile:.zprofile"

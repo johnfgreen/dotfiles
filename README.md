@@ -103,7 +103,7 @@ opencode --version
 ~/Projects/dotfiles/install.sh
 ```
 
-This creates symlinks for all config files under `~/Projects/dotfiles/` to their standard locations (e.g. `~/.zshrc`, `~/.config/ghostty/config.ghostty`, etc.). Existing files are backed up with a `.bak` suffix.
+This creates symlinks for all config files under `~/Projects/dotfiles/` to their standard locations (e.g. `~/.zshrc`, `~/.config/ghostty/config.ghostty`, etc.). It also symlinks the OpenCode memory tools (`opencode-memory` and `todo-manager`) into `~/.config/opencode/bin/`. Existing files are backed up with a `.bak` suffix.
 
 #### 7. Apply macOS system defaults
 
@@ -184,7 +184,9 @@ opencode run "Check system logs for errors in the last 24 hours"
 opencode run "Show me running processes sorted by memory usage"
 ```
 
-OpenCode uses the **multi-agent worktree system** defined in this dotfiles repo. When you ask to modify config, it delegates to specialized sub-agents:
+OpenCode uses a **persistent memory system** (`opencode-memory`) to track tasks and context across sessions. If you quit and relaunch OpenCode, the system agent remembers what it was working on. The memory state file lives at `~/.config/opencode/agents/system-memory.json` and is machine-local (not tracked in git — recreated fresh on each machine).
+
+OpenCode also uses the **multi-agent worktree system** defined in this dotfiles repo. When you ask to modify config, it delegates to specialized sub-agents:
 
 | Agent | Handles |
 |---|---|
@@ -250,4 +252,6 @@ Each sub-agent operates in its own parallel git worktree, allowing multiple agen
 | `home/.gitconfig` | `~/.gitconfig` | Git identity, pull strategy |
 | `home/.macos` | `~/.macos` | macOS system defaults |
 | `Brewfile` | — | Homebrew package manifest |
+| `bin/opencode-memory` | `~/.config/opencode/bin/opencode-memory` | Cross-session memory tool for OpenCode |
+| `bin/todo-manager` | `~/.config/opencode/bin/todo-manager` | Task sync helper wrapping opencode-memory |
 | `install.sh` | — | Symlink creator |
