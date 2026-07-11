@@ -7,3 +7,6 @@ alias wtsl='worktree-session list'
 alias wtso='worktree-session open'
 alias wtsk='worktree-session kill'
 alias wtm='worktree-manager'
+
+# Apply macOS system defaults (idempotent)
+[ -f "$HOME/.macos" ] && source "$HOME/.macos"

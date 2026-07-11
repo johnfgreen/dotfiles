@@ -24,6 +24,7 @@ LINKS=(
   "home/.gitconfig:.gitconfig"
   "home/.zshrc:.zshrc"
   "home/.zprofile:.zprofile"
+  "home/.macos:.macos"
   "config/launchd/com.tmux.server.plist:Library/LaunchAgents/com.tmux.server.plist"
 )
 
