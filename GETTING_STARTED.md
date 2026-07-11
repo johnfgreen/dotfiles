@@ -65,7 +65,23 @@ This installs everything listed in `Brewfile`:
 | `karabiner-elements` | cask | Keyboard remapping (fixes key bleed) |
 | `font-jetbrains-mono-nerd-font` | cask | Terminal font |
 
-### 5. Symlink config files
+### 5. Install OpenCode (AI coding agent)
+
+```bash
+curl -fsSL https://opencode.ai/install | bash
+```
+
+The install script downloads the latest binary to `~/.opencode/bin/` and adds it to your PATH.
+
+Verify the installation:
+
+```bash
+opencode --version
+```
+
+> **Note:** The OpenCode config (`~/.config/opencode/opencode.jsonc`) is managed by this dotfiles repo and will be symlinked in the next step.
+
+### 6. Symlink config files
 
 ```bash
 ~/Projects/dotfiles/install.sh
@@ -73,7 +89,7 @@ This installs everything listed in `Brewfile`:
 
 This creates symlinks for all config files under `~/Projects/dotfiles/` to their standard locations (e.g. `~/.zshrc`, `~/.config/ghostty/config.ghostty`, etc.). Existing files are backed up with a `.bak` suffix.
 
-### 6. Apply macOS system defaults
+### 7. Apply macOS system defaults
 
 The `.macos` file is sourced automatically by `.zshrc` in new shells. To apply immediately:
 
@@ -85,7 +101,16 @@ This sets system preferences like window corner radius.
 
 ## Grant permissions
 
-These are **required** for keyboard shortcuts and window management to work.
+These are **required** for keyboard shortcuts, window management, and the AI coding agent to work.
+
+### OpenCode (AI coding agent)
+
+1. Open **System Settings → Privacy & Security → Accessibility**
+2. Click **+** and add your terminal emulator (e.g. `/Applications/Ghostty.app`)
+3. Open **Input Monitoring** and add your terminal emulator (e.g. `/Applications/Ghostty.app`)
+4. Restart your terminal
+
+> OpenCode reads keystrokes and manages the terminal UI — these permissions let it capture keyboard input and control the system.
 
 ### Karabiner-Elements (key bleed prevention)
 
@@ -114,6 +139,7 @@ These are **required** for keyboard shortcuts and window management to work.
 | **Terminal** | Open Ghostty — should show Catppuccin Mocha theme, JetBrains Mono font |
 | **tmux** | Run `tmux` — status bar should show Catppuccin theme |
 | **Karabiner** | Open Karabiner-Elements → Complex Modifications — should show both Aerospace rules as enabled |
+| **OpenCode** | Run `opencode` — should start the TUI with the system agent loaded |
 
 ## Architecture
 
@@ -145,7 +171,8 @@ Aerospace (if Karabiner is absent)
 | `config/karabiner/karabiner.json` | `~/.config/karabiner/karabiner.json` | Keyboard remapping (workspace keys) |
 | `config/tmux/tmux.conf` | `~/.config/tmux/tmux.conf` | tmux theme, keybindings |
 | `config/nvim/` | `~/.config/nvim/` | Neovim configuration |
-| `config/opencode/` | `~/.config/opencode/` | OpenCode agent configs |
+| `~/.opencode/bin/opencode` | — | OpenCode binary (installed via install script) |
+| `config/opencode/` | `~/.config/opencode/` | OpenCode agent configs, permissions |
 | `config/launchd/com.tmux.server.plist` | `~/Library/LaunchAgents/` | tmux server launch agent |
 | `home/.zshrc` | `~/.zshrc` | Shell aliases, PATH, key bindings |
 | `home/.zprofile` | `~/.zprofile` | Shell environment setup (Homebrew) |
