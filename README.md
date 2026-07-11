@@ -202,23 +202,24 @@ Each sub-agent works in its own git worktree branch, so changes are isolated and
 
 ### Keyboard event pipeline
 
-AeroSpace workspace switching (e.g. Alt+2) can leak keystrokes into apps when macOS Secure Input mode is active (common in Safari). The fix uses a multi-layered approach:
+AeroSpace's Alt-based shortcuts (workspace switching, focus, move) can leak keystrokes into apps when macOS Secure Input mode is active (common in Safari, terminals). The fix uses a multi-layered approach:
 
 ```
-User presses Alt+2
+User presses Alt+key (any Aerospce shortcut)
     ↓
 Karabiner-Elements (IOKit driver level)
-    └─ consumes the event, runs `aerospace workspace 2` via shell
+    └─ consumes the event, runs `aerospace <command>` via shell
+    └─ covers: digits (workspace), h/j/k/l (focus), shift+h/j/k/l (move)
     └─ event never reaches macOS event queue → no key bleed
     ↓
 Ghostty (if event leaks past Karabiner)
     └─ macos-option-as-alt = true  → harmless escape sequence
     └─ macos-auto-secure-input = false
-    └─ keybind = alt+2=ignore      → safety net
+    └─ keybind = alt+...=ignore    → safety net
     ↓
-Aerospace (if Karabiner is absent)
-    └─ alt-2 binding removed from aerospce config
-    └─ focus/move/resize bindings still handled natively
+Aerospace (fallback — Karabiner absent)
+    └─ workspace/focus/move bindings removed from aerospce config
+    └─ only resize (alt+minus/equal) and layout (alt+slash/comma) remain
 ```
 
 ### Agent worktree system
@@ -241,7 +242,7 @@ Each sub-agent operates in its own parallel git worktree, allowing multiple agen
 |---|---|---|
 | `config/aerospace/aerospace.toml` | `~/.config/aerospace/aerospace.toml` | Window manager keybindings, layout |
 | `config/ghostty/config.ghostty` | `~/.config/ghostty/config.ghostty` | Terminal theme, fonts, key handling |
-| `config/karabiner/karabiner.json` | `~/.config/karabiner/karabiner.json` | Keyboard remapping (workspace keys) |
+| `config/karabiner/karabiner.json` | `~/.config/karabiner/karabiner.json` | Keyboard remapping (prevents AeroSpace key bleed into apps) |
 | `config/tmux/tmux.conf` | `~/.config/tmux/tmux.conf` | tmux theme, keybindings |
 | `config/nvim/` | `~/.config/nvim/` | Neovim configuration |
 | `~/.opencode/bin/opencode` | — | OpenCode binary (installed via install script) |
