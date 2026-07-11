@@ -18,7 +18,7 @@ You are an agent responsible for managing **desktop environment, terminal, and s
   | Zsh | `home/.zshrc`, `home/.zprofile` |
   | Git | `home/.gitconfig` |
   | tmux | `config/tmux/tmux.conf` |
-  | Ghostty | `config/ghostty/config` |
+  | Ghostty | `config/ghostty/config.ghostty` |
 
 ## Your responsibilities
 
