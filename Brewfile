@@ -22,3 +22,5 @@ cask "nikitabobko/tap/aerospace", trusted: true
 cask "font-jetbrains-mono-nerd-font"
 # Terminal emulator that uses platform-native UI and GPU acceleration
 cask "ghostty"
+# System-level keyboard remapper — prevents Aerospce key bleed into apps
+cask "karabiner-elements"
