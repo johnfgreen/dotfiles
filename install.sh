@@ -26,6 +26,7 @@ LINKS=(
   "home/.zprofile:.zprofile"
   "home/.macos:.macos"
   "config/launchd/com.tmux.server.plist:Library/LaunchAgents/com.tmux.server.plist"
+  "config/karabiner/karabiner.json:.config/karabiner/karabiner.json"
 )
 
 echo "==> Installing dotfiles from $DOTFILES_DIR"

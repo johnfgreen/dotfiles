@@ -136,32 +136,15 @@ gaps.outer.right =      6
     alt-shift-f = 'fullscreen'
     # Also try: alt-f = 'fullscreen'  # may be intercepted by terminal emulators
 
-    # See: https://nikitabobko.github.io/AeroSpace/commands#workspace
-    alt-1 = 'workspace 1'
-    alt-2 = 'workspace 2'
-    alt-3 = 'workspace 3'
-    alt-4 = 'workspace 4'
-    alt-5 = 'workspace 5'
-    alt-6 = 'workspace 6'
-    alt-7 = 'workspace 7'
-    alt-8 = 'workspace 8'
-    alt-9 = 'workspace 9'
-
-    # See: https://nikitabobko.github.io/AeroSpace/commands#move-node-to-workspace
-    alt-shift-1 = 'move-node-to-workspace 1'
-    alt-shift-2 = 'move-node-to-workspace 2'
-    alt-shift-3 = 'move-node-to-workspace 3'
-    alt-shift-4 = 'move-node-to-workspace 4'
-    alt-shift-5 = 'move-node-to-workspace 5'
-    alt-shift-6 = 'move-node-to-workspace 6'
-    alt-shift-7 = 'move-node-to-workspace 7'
-    alt-shift-8 = 'move-node-to-workspace 8'
-    alt-shift-9 = 'move-node-to-workspace 9'
-
-    # See: https://nikitabobko.github.io/AeroSpace/commands#workspace-back-and-forth
-    alt-tab = 'workspace-back-and-forth'
-    # See: https://nikitabobko.github.io/AeroSpace/commands#move-workspace-to-monitor
-    alt-shift-tab = 'move-workspace-to-monitor --wrap-around next'
+    # -----------------------------------------------------------------------
+    # WORKSPACE SWITCHING — handled by Karabiner-Elements
+    # These bindings are REMOVED from Aerospce because Karabiner consumes the
+    # Option+key events at the driver level (preventing key bleed into apps
+    # like Safari) and runs `aerospace workspace N` via shell_command instead.
+    # See: ~/.config/karabiner/karabiner.json
+    #
+    # Affected combos: alt+[1-9], alt+shift+[1-9], alt+tab, alt+shift+tab
+    # -----------------------------------------------------------------------
 
     # See: https://nikitabobko.github.io/AeroSpace/commands#mode
     alt-shift-semicolon = 'mode service'
