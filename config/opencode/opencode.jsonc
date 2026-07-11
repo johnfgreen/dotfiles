@@ -3,11 +3,6 @@
   "default_agent": "system",
   "shell": "/bin/zsh",
   "agent": {
-    "agent-tmux": {
-      "description": "Manage tmux config in dotfiles worktree (branch: agent/tmux)",
-      "prompt": "agents/agent-tmux.md",
-      "mode": "subagent"
-    },
     "agent-opencode": {
       "description": "Manage opencode agent config in dotfiles worktree (branch: agent/opencode)",
       "prompt": "agents/agent-opencode.md",
@@ -18,13 +13,8 @@
       "prompt": "agents/agent-bootstrap.md",
       "mode": "subagent"
     },
-    "agent-terminal": {
-      "description": "Manage Ghostty terminal config in dotfiles worktree (branch: agent/terminal)",
-      "prompt": "agents/agent-terminal.md",
-      "mode": "subagent"
-    },
     "agent-desktop": {
-      "description": "Manage Aerospace, Neovim, Zsh & Git config in dotfiles worktree (branch: agent/desktop)",
+      "description": "Manage Aerospace, Neovim, Zsh, Git, tmux & Ghostty config in dotfiles worktree (branch: agent/desktop)",
       "prompt": "agents/agent-desktop.md",
       "mode": "subagent"
     }
