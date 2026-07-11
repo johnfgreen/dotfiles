@@ -139,6 +139,91 @@
             ]
           },
           {
+            "description": "Aerospace focus and move (Option+h/j/k/l) — consumes events to prevent key bleed into terminals",
+            "manipulators": [
+              {
+                "from": {
+                  "key_code": "h",
+                  "modifiers": { "mandatory": ["option"] }
+                },
+                "to": [
+                  { "shell_command": "/opt/homebrew/bin/aerospace focus left" }
+                ],
+                "type": "basic"
+              },
+              {
+                "from": {
+                  "key_code": "j",
+                  "modifiers": { "mandatory": ["option"] }
+                },
+                "to": [
+                  { "shell_command": "/opt/homebrew/bin/aerospace focus down" }
+                ],
+                "type": "basic"
+              },
+              {
+                "from": {
+                  "key_code": "k",
+                  "modifiers": { "mandatory": ["option"] }
+                },
+                "to": [
+                  { "shell_command": "/opt/homebrew/bin/aerospace focus up" }
+                ],
+                "type": "basic"
+              },
+              {
+                "from": {
+                  "key_code": "l",
+                  "modifiers": { "mandatory": ["option"] }
+                },
+                "to": [
+                  { "shell_command": "/opt/homebrew/bin/aerospace focus right" }
+                ],
+                "type": "basic"
+              },
+              {
+                "from": {
+                  "key_code": "h",
+                  "modifiers": { "mandatory": ["option", "shift"] }
+                },
+                "to": [
+                  { "shell_command": "/opt/homebrew/bin/aerospace move left" }
+                ],
+                "type": "basic"
+              },
+              {
+                "from": {
+                  "key_code": "j",
+                  "modifiers": { "mandatory": ["option", "shift"] }
+                },
+                "to": [
+                  { "shell_command": "/opt/homebrew/bin/aerospace move down" }
+                ],
+                "type": "basic"
+              },
+              {
+                "from": {
+                  "key_code": "k",
+                  "modifiers": { "mandatory": ["option", "shift"] }
+                },
+                "to": [
+                  { "shell_command": "/opt/homebrew/bin/aerospace move up" }
+                ],
+                "type": "basic"
+              },
+              {
+                "from": {
+                  "key_code": "l",
+                  "modifiers": { "mandatory": ["option", "shift"] }
+                },
+                "to": [
+                  { "shell_command": "/opt/homebrew/bin/aerospace move right" }
+                ],
+                "type": "basic"
+              }
+            ]
+          },
+          {
             "description": "Aerospace move-node-to-workspace (Option+Shift+digits)",
             "manipulators": [
               {

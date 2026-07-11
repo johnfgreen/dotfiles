@@ -45,9 +45,10 @@ mouse-hide-while-typing = true
 # Strategy (4 layers, top-down):
 #
 #   Layer 1: Karabiner-Elements (driver-level)
-#     Intercepts alt+1..9, alt+shift+1..9, alt+tab, alt+shift+tab at the
-#     IOKit driver level, consuming the events before macOS delivers them
-#     to any app. Runs `aerospace workspace N` via shell_command.
+#     Intercepts alt+1..9, alt+shift+1..9, alt+tab, alt+shift+tab,
+#     alt+h/j/k/l (focus), and alt+shift+h/j/k/l (move) at the IOKit
+#     driver level, consuming the events before macOS delivers them to
+#     any app. Runs the corresponding `aerospace` command via shell_command.
 #     Config: ~/.config/karabiner/karabiner.json
 #     This is the PRIMARY defense against key bleed into destination apps.
 #
@@ -97,10 +98,12 @@ keybind = ctrl+cmd+f=toggle_fullscreen
 # --- Aerospace Key Leak Prevention (Ghostty safety net) ---
 # These `ignore` bindings are Layer 4 of the strategy — they catch any
 # alt+key events that bypass Karabiner (Layer 1) and Ghostty's option
-# handling (Layers 2-3). Shell shortcuts (alt+b/f/d) are left unbound
-# so they pass through normally.
+# handling (Layers 2-3). Most of these (digits, h/j/k/l) are already
+# consumed by Karabiner at the driver level, but the Ghostty safety net
+# ensures zero bleed even if Karabiner is temporarily absent.
+# Shell shortcuts (alt+b/f/d) are left unbound so they pass through normally.
 
-# Focus: alt+h/j/k/l
+# Focus + move: alt+h/j/k/l, alt+shift+h/j/k/l (Karabiner-handled at driver level)
 keybind = alt+h=ignore
 keybind = alt+j=ignore
 keybind = alt+k=ignore
