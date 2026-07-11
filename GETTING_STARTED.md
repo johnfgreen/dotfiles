@@ -141,6 +141,41 @@ These are **required** for keyboard shortcuts, window management, and the AI cod
 | **Karabiner** | Open Karabiner-Elements → Complex Modifications — should show both Aerospace rules as enabled |
 | **OpenCode** | Run `opencode` — should start the TUI with the system agent loaded |
 
+## Ongoing management with OpenCode
+
+Once everything is installed, OpenCode can maintain your system going forward. Just start a session:
+
+```bash
+opencode
+```
+
+Or use one-shot commands for quick tasks:
+
+```bash
+# System maintenance
+opencode run "Check for brew updates and upgrade everything"
+opencode run "Find large files over 1GB and suggest cleanup"
+opencode run "Check disk usage and show me what's taking space"
+
+# Dotfile management
+opencode run "Add lazygit to the Brewfile"
+opencode run "Update the tmux status bar colors to match Catppuccin"
+
+# Diagnostics
+opencode run "Check system logs for errors in the last 24 hours"
+opencode run "Show me running processes sorted by memory usage"
+```
+
+OpenCode uses the **multi-agent worktree system** defined in this dotfiles repo. When you ask to modify config, it delegates to specialized sub-agents:
+
+| Agent | Handles |
+|---|---|
+| `@agent-bootstrap` | `Brewfile`, `install.sh`, helper scripts |
+| `@agent-desktop` | Aerospace, Neovim, Zsh, Git, tmux & Ghostty config |
+| `@agent-opencode` | `opencode.jsonc`, agent prompts, permissions |
+
+Each sub-agent works in its own git worktree branch, so changes are isolated and reviewed before merging.
+
 ## Architecture
 
 The keyboard event pipeline, top to bottom:
