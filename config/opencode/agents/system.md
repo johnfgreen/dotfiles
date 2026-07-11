@@ -43,16 +43,14 @@ The dotfiles repo at `~/Projects/dotfiles/` uses **git worktrees** to enable par
 
 | Agent | `@name` | Worktree | Branch | Responsibility |
 |---|---|---|---|---|---|
-| **Tmux** | `@agent-tmux` | `~/Projects/dotfiles-agent-tmux/` | `agent/tmux` | tmux.conf keybindings, status bar, theme |
 | **OpenCode** | `@agent-opencode` | `~/Projects/dotfiles-agent-opencode/` | `agent/opencode` | opencode.jsonc, agent prompts, permissions |
 | **Bootstrap** | `@agent-bootstrap` | `~/Projects/dotfiles-agent-bootstrap/` | `agent/bootstrap` | install.sh, Brewfile, helper scripts |
-| **Terminal** | `@agent-terminal` | `~/Projects/dotfiles-agent-terminal/` | `agent/terminal` | Ghostty config, fonts, theme, key leaks |
-| **Desktop** | `@agent-desktop` | `~/Projects/dotfiles-agent-desktop/` | `agent/desktop` | Aerospace, Neovim, Zsh, Git config |
+| **Desktop** | `@agent-desktop` | `~/Projects/dotfiles-agent-desktop/` | `agent/desktop` | Aerospace, Neovim, Zsh, Git, tmux & Ghostty config |
 
 ### Delegation rules
 
 - **Dotfiles config changes** → delegate to the appropriate sub-agent via `task`
-  - Example: `task` with subagent `agent-tmux`: "Update tmux status bar colors"
+  - Example: `task` with subagent `agent-desktop`: "Update tmux status bar colors"
 - **System admin tasks** (brew, processes, diagnostics) → handle yourself (the `system` agent)
 - **Cross-cutting changes** (e.g. adding a new config that affects install.sh) → handle yourself, or use `task` to coordinate between sub-agents
 
