@@ -1,6 +1,6 @@
 # =============================================================================
 # Ghostty Configuration
-# ~/.config/ghostty/config
+# ~/.config/ghostty/config.ghostty
 # =============================================================================
 # Reload config at runtime: cmd+shift+,
 # See full reference: https://ghostty.org/docs/config/reference
