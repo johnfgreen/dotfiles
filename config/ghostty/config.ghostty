@@ -17,7 +17,10 @@ font-feature = calt
 font-feature = liga
 
 # --- Window ---
-window-decoration = false
+# window-decoration defaults to true (native macOS frame) so corners inherit
+# the system-wide NSConvolutionOverride1 = 6pt, matching Safari.
+# For truly square corners (0pt), set to false.
+# window-decoration = false
 background-opacity = 0.95
 window-padding-x = 8
 window-padding-y = 4
