@@ -1,12 +1,28 @@
-# Getting Started — dotfiles
+# dotfiles — macOS development environment
 
-Set up a new Mac from scratch using this dotfiles repo.
+Personal macOS dotfiles that bootstrap a complete development machine — from zero to productive in one sitting.
 
-## Prerequisites
+## What's inside
 
-These are required before anything else runs.
+| Layer | Tool | Purpose |
+|---|---|---|
+| **Window manager** | [AeroSpace](https://github.com/nikitabobko/AeroSpace) | i3-like tiling window manager |
+| **Terminal** | [Ghostty](https://ghostty.org) | GPU-accelerated terminal emulator |
+| **Multiplexer** | [tmux](https://github.com/tmux/tmux) | Terminal session management |
+| **Editor** | [Neovim](https://neovim.io) | Modal text editor |
+| **Shell** | Zsh | macOS default shell with custom `.zshrc` |
+| **AI agent** | [OpenCode](https://opencode.ai) | AI coding agent for ongoing system management |
+| **Keyboard** | [Karabiner-Elements](https://karabiner-elements.pqrs.org) | Key remapping (fixes AeroSpace key bleed) |
 
-### 1. Xcode Command Line Tools
+All managed through a **multi-agent worktree system**: OpenCode delegates config changes to specialized sub-agents, each working in its own git worktree branch. Changes stay isolated until reviewed and merged.
+
+---
+
+## Quick start — set up a new Mac
+
+### Prerequisites
+
+#### 1. Xcode Command Line Tools
 
 Provides `git`, compilers, and other macOS build tools.
 
@@ -16,7 +32,7 @@ xcode-select --install
 
 If a dialog appears, click "Install" and wait for it to complete.
 
-### 2. Homebrew
+#### 2. Homebrew
 
 Package manager for macOS — used to install everything else.
 
@@ -32,16 +48,16 @@ Verify it works:
 brew doctor
 ```
 
-## Installation
+### Installation
 
-### 3. Clone this repo
+#### 3. Clone this repo
 
 ```bash
 mkdir -p ~/Projects
 git clone https://github.com/johnfgreen/dotfiles.git ~/Projects/dotfiles
 ```
 
-### 4. Install packages and apps
+#### 4. Install packages and apps
 
 ```bash
 brew bundle --file=~/Projects/dotfiles/Brewfile
@@ -65,7 +81,7 @@ This installs everything listed in `Brewfile`:
 | `karabiner-elements` | cask | Keyboard remapping (fixes key bleed) |
 | `font-jetbrains-mono-nerd-font` | cask | Terminal font |
 
-### 5. Install OpenCode (AI coding agent)
+#### 5. Install OpenCode (AI coding agent)
 
 ```bash
 curl -fsSL https://opencode.ai/install | bash
@@ -81,7 +97,7 @@ opencode --version
 
 > **Note:** The OpenCode config (`~/.config/opencode/opencode.jsonc`) is managed by this dotfiles repo and will be symlinked in the next step.
 
-### 6. Symlink config files
+#### 6. Symlink config files
 
 ```bash
 ~/Projects/dotfiles/install.sh
@@ -89,7 +105,7 @@ opencode --version
 
 This creates symlinks for all config files under `~/Projects/dotfiles/` to their standard locations (e.g. `~/.zshrc`, `~/.config/ghostty/config.ghostty`, etc.). Existing files are backed up with a `.bak` suffix.
 
-### 7. Apply macOS system defaults
+#### 7. Apply macOS system defaults
 
 The `.macos` file is sourced automatically by `.zshrc` in new shells. To apply immediately:
 
@@ -99,11 +115,11 @@ source ~/.macos
 
 This sets system preferences like window corner radius.
 
-## Grant permissions
+### Grant permissions
 
 These are **required** for keyboard shortcuts, window management, and the AI coding agent to work.
 
-### OpenCode (AI coding agent)
+#### OpenCode (AI coding agent)
 
 1. Open **System Settings → Privacy & Security → Accessibility**
 2. Click **+** and add your terminal emulator (e.g. `/Applications/Ghostty.app`)
@@ -112,7 +128,7 @@ These are **required** for keyboard shortcuts, window management, and the AI cod
 
 > OpenCode reads keystrokes and manages the terminal UI — these permissions let it capture keyboard input and control the system.
 
-### Karabiner-Elements (key bleed prevention)
+#### Karabiner-Elements (key bleed prevention)
 
 1. Open **System Settings → Privacy & Security → Input Monitoring**
 2. Click **+** and add:
@@ -123,14 +139,14 @@ These are **required** for keyboard shortcuts, window management, and the AI cod
    - `/Library/Application Support/org.pqrs/Karabiner-Elements/Karabiner-Core-Service.app`
 5. Restart Karabiner-Elements (menu bar icon → Quit, then reopen from `/Applications`)
 
-### Aerospace (window manager)
+#### Aerospace (window manager)
 
 1. Open **System Settings → Privacy & Security → Accessibility**
 2. Click **+** and add `/Applications/AeroSpace.app`
 3. Open **Input Monitoring** and add `/Applications/AeroSpace.app`
 4. Restart Aerospace
 
-## Verify everything works
+### Verify everything works
 
 | Check | How |
 |---|---|
@@ -140,6 +156,8 @@ These are **required** for keyboard shortcuts, window management, and the AI cod
 | **tmux** | Run `tmux` — status bar should show Catppuccin theme |
 | **Karabiner** | Open Karabiner-Elements → Complex Modifications — should show both Aerospace rules as enabled |
 | **OpenCode** | Run `opencode` — should start the TUI with the system agent loaded |
+
+---
 
 ## Ongoing management with OpenCode
 
@@ -176,9 +194,13 @@ OpenCode uses the **multi-agent worktree system** defined in this dotfiles repo.
 
 Each sub-agent works in its own git worktree branch, so changes are isolated and reviewed before merging.
 
+---
+
 ## Architecture
 
-The keyboard event pipeline, top to bottom:
+### Keyboard event pipeline
+
+AeroSpace workspace switching (e.g. Alt+2) can leak keystrokes into apps when macOS Secure Input mode is active (common in Safari). The fix uses a multi-layered approach:
 
 ```
 User presses Alt+2
@@ -196,6 +218,20 @@ Aerospace (if Karabiner is absent)
     └─ alt-2 binding removed from aerospce config
     └─ focus/move/resize bindings still handled natively
 ```
+
+### Agent worktree system
+
+Each sub-agent operates in its own parallel git worktree, allowing multiple agents to make changes simultaneously without conflicts:
+
+```bash
+~/Projects/
+  dotfiles/                          # main branch — source of truth
+  dotfiles-agent-bootstrap/          # agent/bootstrap worktree
+  dotfiles-agent-desktop/            # agent/desktop worktree
+  dotfiles-agent-opencode/           # agent/opencode worktree
+```
+
+---
 
 ## File index
 
