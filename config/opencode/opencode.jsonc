@@ -17,6 +17,16 @@
       "description": "Manage Aerospace, Neovim, Zsh, Git, tmux & Ghostty config in dotfiles worktree (branch: agent/desktop)",
       "prompt": "agents/agent-desktop.md",
       "mode": "subagent"
+    },
+    "inclusion-specialist": {
+      "description": "Inclusion Specialist — UDL, accommodations, accessibility audits, and inclusive culture support",
+      "prompt": "agents/inclusion-specialist.md",
+      "mode": "primary",
+      "permission": {
+        "bash": "allow",
+        "edit": "allow",
+        "webfetch": "allow"
+      }
     }
   },
   "permission": {

@@ -126,7 +126,12 @@ def _auto_detect_agent():
             break
         cur = parent
 
-    # 3. Check opencode session DB for recent agent in this directory tree
+    # 3. Check opencode session DB for the *most recent* session in this exact directory.
+    #    This handles `/agent inclusion-specialist` switches: when you Tabs-switch agents in the TUI,
+    #    the session row's `agent` is updated, so the next shell tool in that same directory should
+    #    route to the new agent's memory. We only look at the single most recent session for this cwd
+    #    (exact match), not any recent non-system session — otherwise an old inclusion session would
+    #    incorrectly shadow a newer system session.
     try:
         import sqlite3
 
@@ -134,23 +139,19 @@ def _auto_detect_agent():
         if os.path.exists(db_path):
             conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
             cur_db = conn.cursor()
-            # Get last 20 sessions ordered by recency
-            cur_db.execute("SELECT agent, directory FROM session ORDER BY time_updated DESC LIMIT 20")
-            rows = cur_db.fetchall()
-            for agent, directory in rows:
-                if not agent or agent == "system":
-                    continue
-                # If session directory is cwd or an ancestor of cwd, or cwd is ancestor of session dir, consider match
-                if directory and (cwd == directory or cwd.startswith(directory + os.sep) or directory.startswith(cwd + os.sep)):
-                    # Validate memory file exists or agent is known
-                    if agent == "inclusion-specialist":
-                        conn.close()
-                        return agent
-                    mem_path = os.path.expanduser(f"~/.config/opencode/agents/{agent}-memory.json")
-                    if os.path.exists(mem_path):
-                        conn.close()
-                        return agent
+            cur_db.execute("SELECT agent FROM session WHERE directory = ? ORDER BY time_updated DESC LIMIT 1", (cwd,))
+            row = cur_db.fetchone()
             conn.close()
+            if row and row[0] and row[0] != "system":
+                agent = row[0]
+                # Validate memory file exists or agent is known
+                if agent == "inclusion-specialist":
+                    return agent
+                mem_path = os.path.expanduser(f"~/.config/opencode/agents/{agent}-memory.json")
+                if os.path.exists(mem_path):
+                    return agent
+                # Even if file doesn't exist yet, still route (it will be created on init)
+                return agent
     except Exception:
         pass
     return None
