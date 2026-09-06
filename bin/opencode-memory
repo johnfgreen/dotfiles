@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-opencode-memory — Persistent memory for the opencode system agent.
+opencode-memory — Persistent memory for opencode agents.
 
 Usage:
   opencode-memory status              Show current memory state
@@ -17,19 +17,41 @@ Usage:
                                  (env: OPCODE_MEMORY_MAX_COMPLETED / MAX_NOTES)
   opencode-memory archive             Move all active objectives to completed (start fresh, keep history)
   opencode-memory forget              Permanently delete all active objectives (no history kept)
+
+Per-agent memory:
+  opencode-memory --agent <name> <command> [args...]
+  opencode-memory --memory <path> <command> [args...]
+
+  Env vars (override defaults, CLI flags override env):
+    OPCODE_MEMORY_PATH  — explicit path to memory JSON
+    OPCODE_AGENT        — agent name (e.g. system, inclusion-specialist)
+                         resolves to ~/.config/opencode/agents/<agent>-memory.json
+                         ("system" → system-memory.json for backward compat)
+
+  Examples:
+    opencode-memory status
+    opencode-memory --agent inclusion-specialist status
+    opencode-memory --agent inclusion-specialist add-task "Draft UDL checklist" --priority high
+    OPCODE_AGENT=inclusion-specialist opencode-memory get-context
+    opencode-memory --memory ./.opencode/memory.json status
+
+  Defaults to system agent ( ~/.config/opencode/agents/system-memory.json )
 """
 
 import json
 import os
 import sys
-import time
 from datetime import datetime, timezone
-
-MEMORY_PATH = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
 
 # Pruning limits (configurable via env vars)
 MAX_COMPLETED_TASKS = int(os.environ.get("OPCODE_MEMORY_MAX_COMPLETED", "100"))
 MAX_CONTEXT_NOTES = int(os.environ.get("OPCODE_MEMORY_MAX_NOTES", "20"))
+
+DEFAULT_MEMORY_PATH = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
+AGENT_MEMORY_TEMPLATE = os.path.expanduser("~/.config/opencode/agents/{agent}-memory.json")
+
+# Will be resolved in main() before loading
+MEMORY_PATH = DEFAULT_MEMORY_PATH
 
 SHELL = {
     "schema_version": 1,
@@ -45,6 +67,65 @@ SHELL = {
 
 def _now():
     return datetime.now(timezone.utc).isoformat()
+
+
+def _resolve_memory_path(argv):
+    """Resolve MEMORY_PATH from env vars and CLI flags. Mutates argv to remove handled flags.
+    Returns the resolved path and the cleaned argv."""
+    global MEMORY_PATH
+    path = None
+
+    # 1. Env var OPCODE_MEMORY_PATH takes precedence over OPCODE_AGENT
+    if os.environ.get("OPCODE_MEMORY_PATH"):
+        path = os.path.expanduser(os.environ["OPCODE_MEMORY_PATH"])
+    elif os.environ.get("OPCODE_AGENT"):
+        agent = os.environ["OPCODE_AGENT"].strip()
+        if agent == "system":
+            path = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
+        else:
+            # sanitize agent name to avoid path traversal
+            safe = agent.replace("/", "-").replace("\\", "-")
+            path = os.path.expanduser(f"~/.config/opencode/agents/{safe}-memory.json")
+    else:
+        path = DEFAULT_MEMORY_PATH
+
+    # 2. CLI flags override env vars — scan argv for --agent and --memory
+    cleaned = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--agent" and i + 1 < len(argv):
+            agent = argv[i + 1].strip()
+            if agent == "system":
+                path = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
+            else:
+                safe = agent.replace("/", "-").replace("\\", "-")
+                path = os.path.expanduser(f"~/.config/opencode/agents/{safe}-memory.json")
+            i += 2
+            continue
+        elif arg == "--memory" and i + 1 < len(argv):
+            path = os.path.expanduser(argv[i + 1])
+            i += 2
+            continue
+        elif arg.startswith("--agent="):
+            agent = arg.split("=", 1)[1].strip()
+            if agent == "system":
+                path = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
+            else:
+                safe = agent.replace("/", "-").replace("\\", "-")
+                path = os.path.expanduser(f"~/.config/opencode/agents/{safe}-memory.json")
+            i += 1
+            continue
+        elif arg.startswith("--memory="):
+            path = os.path.expanduser(arg.split("=", 1)[1])
+            i += 1
+            continue
+        else:
+            cleaned.append(arg)
+            i += 1
+
+    MEMORY_PATH = path
+    return cleaned
 
 
 def _load():
@@ -83,6 +164,8 @@ def _prune(data, silent=False):
 
 def _save(data):
     data["last_updated"] = _now()
+    # ensure directory exists
+    os.makedirs(os.path.dirname(MEMORY_PATH), exist_ok=True)
     with open(MEMORY_PATH, "w") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.write("\n")
@@ -105,7 +188,7 @@ def _next_id(data):
 
 
 def cmd_status(data, args=None):
-    print("=== opencode Memory ===")
+    print(f"=== opencode Memory [{MEMORY_PATH}] ===")
     print(f"Session count: {data.get('session_count', 0)}")
     print(f"Last updated:  {data.get('last_updated', 'never')}")
     print(f"Last session:  {data.get('last_session_end', 'never')}")
@@ -133,10 +216,10 @@ def cmd_status(data, args=None):
 
 def cmd_init(data, args=None):
     if os.path.exists(MEMORY_PATH):
-        print("Memory file already exists.")
+        print(f"Memory file already exists: {MEMORY_PATH}")
     else:
         _save(dict(SHELL))
-        print("Initialized memory file.")
+        print(f"Initialized memory file: {MEMORY_PATH}")
 
 
 def cmd_add_task(data, args):
@@ -167,7 +250,7 @@ def cmd_add_task(data, args):
     }
     data.setdefault("active_objectives", []).append(task)
     _save(data)
-    print(f"Added task {oid}: [{priority}] {desc}")
+    print(f"Added task {oid}: [{priority}] {desc} → {MEMORY_PATH}")
 
 
 def cmd_update_task(data, args):
@@ -214,7 +297,7 @@ def cmd_update_task(data, args):
         found["notes"] = notes_val
 
     _save(data)
-    print(f"Updated {tid}: status={status_val or 'unchanged'}, notes={notes_val or 'unchanged'}")
+    print(f"Updated {tid}: status={status_val or 'unchanged'}, notes={notes_val or 'unchanged'} → {MEMORY_PATH}")
 
 
 def cmd_complete_task(data, args):
@@ -281,7 +364,7 @@ def cmd_get_context(data, args=None):
 def cmd_heartbeat(data, args=None):
     _prune(data)
     _save(data)
-    print(f"Heartbeat: {data['last_updated']}")
+    print(f"Heartbeat: {data['last_updated']} → {MEMORY_PATH}")
 
 
 def cmd_archive(data, args=None):
@@ -349,9 +432,17 @@ def main():
         print(__doc__.strip())
         sys.exit(1)
 
+    # Resolve memory path first, handling --agent / --memory flags + env vars
+    raw_args = sys.argv[1:]
+    cleaned_args = _resolve_memory_path(raw_args)
+
+    if not cleaned_args:
+        print(__doc__.strip())
+        sys.exit(1)
+
     data = _load()
-    cmd = sys.argv[1]
-    args = sys.argv[2:]
+    cmd = cleaned_args[0]
+    args = cleaned_args[1:]
 
     commands = {
         "status": cmd_status,
