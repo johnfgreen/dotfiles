@@ -33,6 +33,8 @@ LINKS=(
   "config/launchd/com.tmux.server.plist:Library/LaunchAgents/com.tmux.server.plist"
   "config/launchd/com.display-center.plist:Library/LaunchAgents/com.display-center.plist"
   "config/karabiner/karabiner.json:.config/karabiner/karabiner.json"
+  "home/.wakeup:.wakeup"
+  "home/.sleep:.sleep"
 )
 
 echo "==> Installing dotfiles from $DOTFILES_DIR"

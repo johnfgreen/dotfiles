@@ -273,3 +273,80 @@ case "$MODE" in
   external-main) apply_external_main "$MACBOOK_ID" "$DELL_ID" ;;
   side-by-side) apply_side_by_side "$MACBOOK_ID" "$DELL_ID" ;;
 esac
+
+# --- VNC window recenter (lid close/open, display re-plug) ---
+# Keep John's Mac mini VNC window centered on DELL at 1920x1132 (-225,-1286)
+# This is the "B" preference: floating native, no black inside, 320px/154px desktop border
+# Runs every time display-center is invoked (launchd every 10s + wake), idempotent
+# Uses aerospace + direct Screen Sharing AppleScript (no System Events assistive access needed for launchd)
+recenter_vnc() {
+  if ! pgrep -x "Screen Sharing" >/dev/null 2>&1; then return 0; fi
+  # Check via aerospace if a Screen Sharing window with "Mac mini" exists (no assistive access needed)
+  if ! /opt/homebrew/bin/aerospace list-windows --all --format '%{window-title}' 2>&1 | grep -q "Mac mini"; then
+    return 0
+  fi
+  # Get current position/size via direct Screen Sharing AppleScript (no System Events)
+  local cur
+  cur=$(osascript -e 'tell application "Screen Sharing" to get {position of window 1, size of window 1}' 2>&1 || echo "fail")
+  # osascript returns like "-225, -1286, 1920, 1132" or error
+  if [[ "$cur" == *"fail"* ]] || [[ -z "$cur" ]] || [[ "$cur" == *"error"* ]]; then
+    # Fallback to System Events if direct fails (requires assistive access, may fail under launchd)
+    cur=$(osascript -e 'tell application "System Events" to tell process "Screen Sharing" to get {position of window 1, size of window 1}' 2>&1 || echo "fail")
+    if [[ "$cur" == *"fail"* ]] || [[ -z "$cur" ]] || [[ "$cur" == *"not allowed"* ]]; then return 0; fi
+  fi
+  # Expected: -225, -1286, 1920, 1132
+  local pos_size
+  pos_size=$(echo "$cur" | tr -d ' ' ) # e.g. "-225,-1286,1920,1132"
+  if [[ "$pos_size" == "-225,-1286,1920,1132" ]]; then
+    # Already correct, ensure floating on workspace 10
+    if ! /opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{workspace} %{window-layout}' 2>&1 | grep -q "Screen Sharing.*10.*floating"; then
+      local wid
+      wid=$(/opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{app-name}' 2>&1 | grep "Screen Sharing" | awk '{print $1}' | head -n1)
+      if [[ -n "$wid" ]]; then
+        /opt/homebrew/bin/aerospace layout floating --window-id "$wid" >/dev/null 2>&1 || true
+        /opt/homebrew/bin/aerospace move-node-to-workspace 10 --window-id "$wid" >/dev/null 2>&1 || true
+      fi
+    fi
+    return 0
+  fi
+  # Filter out error strings for logging
+  local log_cur="$cur"
+  if [[ "$log_cur" == *"execution error"* ]]; then log_cur="error"; fi
+  if [[ -z "${QUIET:-}" ]]; then
+    echo "Recentering VNC window to -225,-1286 1920x1132 (was $log_cur)"
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Recentering VNC window to -225,-1286 1920x1132 (was $log_cur)"
+  fi
+  local wid
+  wid=$(/opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{app-name}' 2>&1 | grep "Screen Sharing" | awk '{print $1}' | head -n1)
+  if [[ -n "$wid" ]]; then
+    /opt/homebrew/bin/aerospace layout floating --window-id "$wid" >/dev/null 2>&1 || true
+    /opt/homebrew/bin/aerospace move-node-to-workspace 10 --window-id "$wid" >/dev/null 2>&1 || true
+  fi
+  # Use direct Screen Sharing tell (no System Events) for launchd compatibility
+  osascript <<'OSA' >/dev/null 2>&1 || true
+tell application "Screen Sharing"
+  try
+    set position of window 1 to {-225, -1286}
+    set size of window 1 to {1920, 1132}
+  end try
+end tell
+OSA
+  # Fallback via System Events if direct didn't work (e.g., window title mismatch)
+  osascript <<'OSA2' >/dev/null 2>&1 || true
+tell application "System Events" to tell process "Screen Sharing"
+  try
+    tell window 1
+      set position to {-225, -1286}
+      set size to {1920, 1132}
+    end tell
+  end try
+end tell
+OSA2
+}
+
+# Only recenter VNC if DELL is connected and we are in macbook-main mode (centered below)
+# Don't recenter when in side-by-side or external-main unless user explicitly wants
+if [[ "$MODE" == "macbook-main" ]]; then
+  recenter_vnc || true
+fi

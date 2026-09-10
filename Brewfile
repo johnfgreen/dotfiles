@@ -26,3 +26,4 @@ cask "font-jetbrains-mono-nerd-font"
 cask "ghostty"
 # System-level keyboard remapper — prevents Aerospce key bleed into apps
 cask "karabiner-elements"
+brew "sleepwatcher"
