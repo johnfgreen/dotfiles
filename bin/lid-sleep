@@ -6,15 +6,16 @@
 STATE_FILE="/tmp/lid-sleep.state"
 LOG_FILE="/tmp/lid-sleep.log"
 
-# Get lid state: Yes = closed, No = open
+# Get lid state: Yes = closed, No = open — also log cause for debugging
 lid_state=$(ioreg -r -k AppleClamshellState -d 4 2>&1 | grep AppleClamshellState | head -n1 | grep -o '"AppleClamshellState" = .*' | cut -d'"' -f4)
-# Alternative parse if grep fails
 if [[ -z "$lid_state" ]]; then
   lid_state=$(ioreg -r -k AppleClamshellState -d 4 2>&1 | awk -F'"' '/AppleClamshellState/ {print $4; exit}')
 fi
-
-# Default to No if not found (lid open)
 if [[ -z "$lid_state" ]]; then lid_state="No"; fi
+# Also get cause (whether system would sleep on clamshell)
+lid_cause=$(ioreg -l 2>&1 | grep AppleClamshellCausesSleep | head -n1 | grep -o '"AppleClamshellCausesSleep" = .*' | cut -d'"' -f4)
+if [[ -z "$lid_cause" ]]; then lid_cause=$(ioreg -r -k AppleClamshellCausesSleep -d 4 2>&1 | awk -F'"' '/AppleClamshellCausesSleep/ {print $4; exit}'); fi
+if [[ -z "$lid_cause" ]]; then lid_cause="unknown"; fi
 
 # Check if external DELL is connected (2+ displays)
 dell_connected=0
@@ -43,16 +44,22 @@ fi
 
 # New close event
 echo "closed" > "$STATE_FILE" 2>/dev/null || true
-echo "$(date '+%Y-%m-%d %H:%M:%S') lid closed (DELL connected=$dell_connected) — forcing sleep" >> "$LOG_FILE" 2>&1
+echo "$(date '+%Y-%m-%d %H:%M:%S') lid closed (state=$lid_state cause=$lid_cause DELL=$dell_connected) — forcing sleep" >> "$LOG_FILE" 2>&1
 
-# Only force sleep if we want clamshell disabled (always when lid closed, regardless of DELL)
-# If you want to allow clamshell when DELL connected, add: [[ "$dell_connected" -eq 0 ]] && exit 0
-# But per user request: lid close should always sleep, even with DELL
-# So we sleep unconditionally on lid close
-
-# Try pmset sleepnow first (user-level, no sudo needed on Apple Silicon? may need sudo)
-pmset sleepnow 2>> "$LOG_FILE" || true
-# Fallback via AppleScript (more reliable as user)
-osascript -e 'tell application "System Events" to sleep' 2>> "$LOG_FILE" || true
+# Try multiple sleep methods — log each result
+{
+  echo "  trying pmset sleepnow..."
+  pmset sleepnow 2>&1
+  echo "  pmset exit:$?"
+  echo "  trying osascript System Events sleep..."
+  osascript -e 'tell application "System Events" to sleep' 2>&1
+  echo "  osascript System Events exit:$?"
+  echo "  trying osascript Finder sleep..."
+  osascript -e 'tell application "Finder" to sleep' 2>&1
+  echo "  osascript Finder exit:$?"
+  echo "  trying pmset displaysleepnow..."
+  pmset displaysleepnow 2>&1
+  echo "  displaysleepnow exit:$?"
+} >> "$LOG_FILE" 2>&1 || true
 
 exit 0
