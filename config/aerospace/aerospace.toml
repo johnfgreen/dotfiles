@@ -53,6 +53,9 @@ automatically-unhide-macos-hidden-apps = false
 # Fallback value (if you omit the key): persistent-workspaces = []
 persistent-workspaces = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
 
+# Force workspace 10 (Screen Sharing/VNC) to always appear on the DELL external monitor
+workspace-to-monitor-force-assignment = { "10" = "DELL U2715H" }
+
 # A callback that runs every time binding mode changes
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
 # See: https://nikitabobko.github.io/AeroSpace/commands#mode
@@ -72,12 +75,13 @@ key-mapping.preset = 'qwerty'
 #                 Monitor pattern is the same as for 'workspace-to-monitor-force-assignment'.
 #                 See:
 #                 https://nikitabobko.github.io/AeroSpace/guide#assign-workspaces-to-monitors
-gaps.inner.horizontal = 4
-gaps.inner.vertical =   4
-gaps.outer.left =       6
-gaps.outer.bottom =     6
-gaps.outer.top =        6
-gaps.outer.right =      6
+# Gaps: zero on DELL (workspace 10 / VNC) for edge-to-edge Screen Sharing, 6/4 elsewhere
+gaps.inner.horizontal = [{ monitor."DELL U2715H" = 0 }, 4]
+gaps.inner.vertical = [{ monitor."DELL U2715H" = 0 }, 4]
+gaps.outer.left = [{ monitor."DELL U2715H" = 0 }, 6]
+gaps.outer.bottom = [{ monitor."DELL U2715H" = 0 }, 6]
+gaps.outer.top = [{ monitor."DELL U2715H" = 0 }, 6]
+gaps.outer.right = [{ monitor."DELL U2715H" = 0 }, 6]
 
 # 'main' binding mode declaration
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
@@ -170,3 +174,15 @@ gaps.outer.right =      6
     alt-shift-j = ['join-with down', 'mode main']
     alt-shift-k = ['join-with up', 'mode main']
     alt-shift-l = ['join-with right', 'mode main']
+
+# Screen Sharing (VNC) — VNC session windows keep on DELL workspace 10, tiling (zero gaps) and fullscreen to fill 2560x1440
+# (chooser and other dialogs stay floating)
+[[on-window-detected]]
+if.app-id = "com.apple.ScreenSharing"
+if.window-title-regex-substring = "Mac mini"
+run = ["move-node-to-workspace 10", "layout tiling", "fullscreen"]
+
+# Fallback for other Screen Sharing windows (connections chooser, etc.)
+[[on-window-detected]]
+if.app-id = "com.apple.ScreenSharing"
+run = ["layout floating", "move-node-to-workspace 10"]
