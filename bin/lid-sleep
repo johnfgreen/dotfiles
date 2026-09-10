@@ -6,27 +6,26 @@
 STATE_FILE="/tmp/lid-sleep.state"
 LOG_FILE="/tmp/lid-sleep.log"
 
-# Get lid state: Yes = closed, No = open — also log cause for debugging
-lid_state=$(ioreg -r -k AppleClamshellState -d 4 2>&1 | grep AppleClamshellState | head -n1 | grep -o '"AppleClamshellState" = .*' | cut -d'"' -f4)
-if [[ -z "$lid_state" ]]; then
-  lid_state=$(ioreg -r -k AppleClamshellState -d 4 2>&1 | awk -F'"' '/AppleClamshellState/ {print $4; exit}')
-fi
+# Get lid state and cause in one fast ioreg call
+clamshell_info=$(ioreg -r -k AppleClamshellState -d 4 2>&1)
+lid_state=$(echo "$clamshell_info" | sed -n 's/.*AppleClamshellState" = \([^ ]*\).*/\1/p' | head -n1)
 if [[ -z "$lid_state" ]]; then lid_state="No"; fi
-# Also get cause (whether system would sleep on clamshell)
-lid_cause=$(ioreg -l 2>&1 | grep AppleClamshellCausesSleep | head -n1 | grep -o '"AppleClamshellCausesSleep" = .*' | cut -d'"' -f4)
-if [[ -z "$lid_cause" ]]; then lid_cause=$(ioreg -r -k AppleClamshellCausesSleep -d 4 2>&1 | awk -F'"' '/AppleClamshellCausesSleep/ {print $4; exit}'); fi
+lid_cause=$(echo "$clamshell_info" | sed -n 's/.*AppleClamshellCausesSleep" = \([^ ]*\).*/\1/p' | head -n1)
 if [[ -z "$lid_cause" ]]; then lid_cause="unknown"; fi
 
-# Check if external DELL is connected (2+ displays)
+# Check if external DELL is connected (2+ displays) — use displayplacer with full PATH
 dell_connected=0
-if displayplacer list 2>&1 | grep -q "27 inch external screen"; then
+if /opt/homebrew/bin/displayplacer list 2>&1 | grep -q "27 inch external screen"; then
   dell_connected=1
-elif displayplacer list 2>&1 | grep -q "external screen"; then
+elif /opt/homebrew/bin/displayplacer list 2>&1 | grep -q "external screen"; then
   dell_connected=1
 else
-  cnt=$(displayplacer list 2>&1 | grep -c "Persistent screen id:" || true)
+  cnt=$(/opt/homebrew/bin/displayplacer list 2>&1 | grep -c "Persistent screen id:" || true)
   if [[ "$cnt" -gt 1 ]]; then dell_connected=1; fi
 fi
+
+# Verbose log every poll for debugging lid close with external
+echo "$(date '+%Y-%m-%d %H:%M:%S') poll: state=$lid_state cause=$lid_cause DELL=$dell_connected" >> "$LOG_FILE" 2>&1
 
 # Only act when lid closed
 if [[ "$lid_state" != "Yes" ]]; then
@@ -60,6 +59,9 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') lid closed (state=$lid_state cause=$lid_cause
   echo "  trying pmset displaysleepnow..."
   pmset displaysleepnow 2>&1
   echo "  displaysleepnow exit:$?"
+  echo "  trying sudo pmset sleepnow (if no password)..."
+  sudo -n pmset sleepnow 2>&1 || echo "  sudo pmset failed (no sudo)"
+  echo "  sudo exit:$?"
 } >> "$LOG_FILE" 2>&1 || true
 
 exit 0
