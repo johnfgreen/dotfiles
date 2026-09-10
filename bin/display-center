@@ -251,54 +251,47 @@ if ! have_displayplacer; then
   fi
 fi
 
-# Detect if external is even connected
-if ! displayplacer list 2>&1 | grep -q "27 inch external screen"; then
-  if ! displayplacer list 2>&1 | grep -q "external screen"; then
-    # Maybe only 1 screen — check count of persistent IDs
-    count=$(displayplacer list 2>&1 | grep -c "Persistent screen id:" || true)
-    if [[ "$count" -le 1 ]]; then
-      if [[ -z "${QUIET:-}" ]]; then
-        echo "Only internal display detected (DELL not connected). Nothing to arrange." >&2
-        displayplacer list 2>&1 | grep -E "Persistent|Type:|Resolution:|Origin:" || true
-      fi
-      exit 0
-    fi
-  fi
-fi
-
-read -r MACBOOK_ID DELL_ID <<< "$(detect_ids)"
-
-case "$MODE" in
-  macbook-main) apply_macbook_main "$MACBOOK_ID" "$DELL_ID" ;;
-  external-main) apply_external_main "$MACBOOK_ID" "$DELL_ID" ;;
-  side-by-side) apply_side_by_side "$MACBOOK_ID" "$DELL_ID" ;;
-esac
-
-# --- VNC window recenter (lid close/open, display re-plug) ---
-# Keep John's Mac mini VNC window centered on DELL at 1920x1132 (-225,-1286)
-# This is the "B" preference: floating native, no black inside, 320px/154px desktop border
-# Runs every time display-center is invoked (launchd every 10s + wake), idempotent
-# Uses aerospace + direct Screen Sharing AppleScript (no System Events assistive access needed for launchd)
+# --- VNC window recenter — display-aware ---
+# DELL connected: 1920x1132 at -225,-1286 centered on DELL (B preference)
+# DELL unplugged (Air only 1470x956): 1470x878 at 0,39 centered on Air (full-width, no overflow)
+# Runs every invocation (launchd 10s + wake), idempotent, no assistive-access needed for launchd
 recenter_vnc() {
   if ! pgrep -x "Screen Sharing" >/dev/null 2>&1; then return 0; fi
-  # Check via aerospace if a Screen Sharing window with "Mac mini" exists (no assistive access needed)
   if ! /opt/homebrew/bin/aerospace list-windows --all --format '%{window-title}' 2>&1 | grep -q "Mac mini"; then
     return 0
   fi
-  # Get current position/size via direct Screen Sharing AppleScript (no System Events)
+  local dell_connected=0
+  if displayplacer list 2>&1 | grep -q "27 inch external screen"; then
+    dell_connected=1
+  elif displayplacer list 2>&1 | grep -q "external screen"; then
+    local cnt
+    cnt=$(displayplacer list 2>&1 | grep -c "Persistent screen id:" || true)
+    if [[ "$cnt" -gt 1 ]]; then dell_connected=1; fi
+  fi
+  local exp_pos exp_size exp_log
+  if [[ "$dell_connected" -eq 1 ]]; then
+    exp_pos="-225,-1286"
+    exp_size="1920,1132"
+    exp_log="-225,-1286 1920x1132 (DELL centered)"
+  else
+    exp_pos="0,39"
+    exp_size="1470,878"
+    exp_log="0,39 1470x878 (Air centered, DELL unplugged)"
+  fi
+  local exp_x exp_y exp_w exp_h
+  IFS=',' read -r exp_x exp_y <<< "$(echo "$exp_pos" | tr -d ' ')"
+  IFS=',' read -r exp_w exp_h <<< "$(echo "$exp_size" | tr -d ' ')"
   local cur
   cur=$(osascript -e 'tell application "Screen Sharing" to get {position of window 1, size of window 1}' 2>&1 || echo "fail")
-  # osascript returns like "-225, -1286, 1920, 1132" or error
   if [[ "$cur" == *"fail"* ]] || [[ -z "$cur" ]] || [[ "$cur" == *"error"* ]]; then
-    # Fallback to System Events if direct fails (requires assistive access, may fail under launchd)
     cur=$(osascript -e 'tell application "System Events" to tell process "Screen Sharing" to get {position of window 1, size of window 1}' 2>&1 || echo "fail")
     if [[ "$cur" == *"fail"* ]] || [[ -z "$cur" ]] || [[ "$cur" == *"not allowed"* ]]; then return 0; fi
   fi
-  # Expected: -225, -1286, 1920, 1132
   local pos_size
-  pos_size=$(echo "$cur" | tr -d ' ' ) # e.g. "-225,-1286,1920,1132"
-  if [[ "$pos_size" == "-225,-1286,1920,1132" ]]; then
-    # Already correct, ensure floating on workspace 10
+  pos_size=$(echo "$cur" | tr -d ' ' )
+  local exp_pos_size="${exp_pos},${exp_size}"
+  exp_pos_size=$(echo "$exp_pos_size" | tr -d ' ')
+  if [[ "$pos_size" == "$exp_pos_size" ]]; then
     if ! /opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{workspace} %{window-layout}' 2>&1 | grep -q "Screen Sharing.*10.*floating"; then
       local wid
       wid=$(/opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{app-name}' 2>&1 | grep "Screen Sharing" | awk '{print $1}' | head -n1)
@@ -309,13 +302,12 @@ recenter_vnc() {
     fi
     return 0
   fi
-  # Filter out error strings for logging
   local log_cur="$cur"
   if [[ "$log_cur" == *"execution error"* ]]; then log_cur="error"; fi
   if [[ -z "${QUIET:-}" ]]; then
-    echo "Recentering VNC window to -225,-1286 1920x1132 (was $log_cur)"
+    echo "Recentering VNC window to $exp_log (was $log_cur)"
   else
-    echo "$(date '+%Y-%m-%d %H:%M:%S') Recentering VNC window to -225,-1286 1920x1132 (was $log_cur)"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Recentering VNC window to $exp_log (was $log_cur)"
   fi
   local wid
   wid=$(/opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{app-name}' 2>&1 | grep "Screen Sharing" | awk '{print $1}' | head -n1)
@@ -323,30 +315,41 @@ recenter_vnc() {
     /opt/homebrew/bin/aerospace layout floating --window-id "$wid" >/dev/null 2>&1 || true
     /opt/homebrew/bin/aerospace move-node-to-workspace 10 --window-id "$wid" >/dev/null 2>&1 || true
   fi
-  # Use direct Screen Sharing tell (no System Events) for launchd compatibility
-  osascript <<'OSA' >/dev/null 2>&1 || true
-tell application "Screen Sharing"
-  try
-    set position of window 1 to {-225, -1286}
-    set size of window 1 to {1920, 1132}
-  end try
-end tell
-OSA
-  # Fallback via System Events if direct didn't work (e.g., window title mismatch)
-  osascript <<'OSA2' >/dev/null 2>&1 || true
-tell application "System Events" to tell process "Screen Sharing"
-  try
+  osascript -e "tell application \"Screen Sharing\" to try
+    set position of window 1 to {$exp_x, $exp_y}
+    set size of window 1 to {$exp_w, $exp_h}
+  end try" >/dev/null 2>&1 || true
+  osascript -e "tell application \"System Events\" to tell process \"Screen Sharing\" to try
     tell window 1
-      set position to {-225, -1286}
-      set size to {1920, 1132}
+      set position to {$exp_x, $exp_y}
+      set size to {$exp_w, $exp_h}
     end tell
-  end try
-end tell
-OSA2
+  end try" >/dev/null 2>&1 || true
 }
 
-# Only recenter VNC if DELL is connected and we are in macbook-main mode (centered below)
-# Don't recenter when in side-by-side or external-main unless user explicitly wants
-if [[ "$MODE" == "macbook-main" ]]; then
-  recenter_vnc || true
+# Detect if external is even connected
+DELL_CONNECTED=1
+if ! displayplacer list 2>&1 | grep -q "27 inch external screen"; then
+  if ! displayplacer list 2>&1 | grep -q "external screen"; then
+    count=$(displayplacer list 2>&1 | grep -c "Persistent screen id:" || true)
+    if [[ "$count" -le 1 ]]; then
+      DELL_CONNECTED=0
+      if [[ -z "${QUIET:-}" ]]; then
+        echo "Only internal display detected (DELL not connected). Nothing to arrange." >&2
+        displayplacer list 2>&1 | grep -E "Persistent|Type:|Resolution:|Origin:" || true
+      fi
+    fi
+  fi
 fi
+
+if [[ "$DELL_CONNECTED" -eq 1 ]]; then
+  read -r MACBOOK_ID DELL_ID <<< "$(detect_ids)"
+  case "$MODE" in
+    macbook-main) apply_macbook_main "$MACBOOK_ID" "$DELL_ID" ;;
+    external-main) apply_external_main "$MACBOOK_ID" "$DELL_ID" ;;
+    side-by-side) apply_side_by_side "$MACBOOK_ID" "$DELL_ID" ;;
+  esac
+fi
+
+# Always recenter VNC (display-aware: chooses DELL vs Air position internally)
+recenter_vnc || true
