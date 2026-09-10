@@ -8,6 +8,11 @@ alias wtso='worktree-session open'
 alias wtsk='worktree-session kill'
 alias wtm='worktree-manager'
 
+# VNC — Mac mini via Tailscale (Screen Sharing.app)
+alias vnc-mini='open vnc://100.125.111.112'
+alias vnc-mini-magic='open vnc://johns-mac-mini.tail236725.ts.net'
+alias vnc-mini-short='open vnc://johns-mac-mini'
+
 # opencode memory auto-routing
 # Sets OPCODE_AGENT based on --agent flag and current directory
 

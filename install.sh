@@ -31,6 +31,7 @@ LINKS=(
   "home/.zprofile:.zprofile"
   "home/.macos:.macos"
   "config/launchd/com.tmux.server.plist:Library/LaunchAgents/com.tmux.server.plist"
+  "config/launchd/com.display-center.plist:Library/LaunchAgents/com.display-center.plist"
   "config/karabiner/karabiner.json:.config/karabiner/karabiner.json"
 )
 

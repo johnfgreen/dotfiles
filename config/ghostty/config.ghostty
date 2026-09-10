@@ -119,7 +119,7 @@ keybind = alt+shift+l=ignore
 keybind = alt+minus=ignore
 keybind = alt+equal=ignore
 
-# Workspace: alt+1..9
+# Workspace: alt+1..9, alt+0 = 10
 keybind = alt+1=ignore
 keybind = alt+2=ignore
 keybind = alt+3=ignore
@@ -129,8 +129,9 @@ keybind = alt+6=ignore
 keybind = alt+7=ignore
 keybind = alt+8=ignore
 keybind = alt+9=ignore
+keybind = alt+0=ignore
 
-# Move to workspace: alt+shift+1..9
+# Move to workspace: alt+shift+1..9, alt+shift+0 = 10
 keybind = alt+shift+1=ignore
 keybind = alt+shift+2=ignore
 keybind = alt+shift+3=ignore
@@ -140,6 +141,7 @@ keybind = alt+shift+6=ignore
 keybind = alt+shift+7=ignore
 keybind = alt+shift+8=ignore
 keybind = alt+shift+9=ignore
+keybind = alt+shift+0=ignore
 
 # Other Aerospace: tab, slash, comma, semicolon
 keybind = alt+tab=ignore

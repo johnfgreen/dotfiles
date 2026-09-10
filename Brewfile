@@ -1,6 +1,8 @@
 tap "nikitabobko/tap"
 # GNU File, Shell, and Text utilities
 brew "coreutils"
+# Utility to configure multi-display resolutions and arrangements
+brew "displayplacer"
 # Simple, fast and user-friendly alternative to find
 brew "fd"
 # GitHub command-line tool
