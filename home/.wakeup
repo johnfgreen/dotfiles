@@ -3,6 +3,19 @@
 # Re-apply display-center and VNC position immediately (faster than 10s polling)
 sleep 2
 /Users/john/Projects/dotfiles/bin/display-center --quiet >/tmp/display-center.log 2>&1 || true
+# Restore window→workspace mapping saved at sleep (fixes collapse to workspace 1)
+sleep 1
+if [[ -f /tmp/aerospace-sleep-state ]]; then
+  while read -r wid ws; do
+    [[ -z "$wid" || -z "$ws" ]] && continue
+    # Only move if window still exists and not already on correct workspace
+    cur_ws=$(/opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{workspace}' 2>/dev/null | awk -v id="$wid" '$1==id {print $2}')
+    if [[ -n "$cur_ws" && "$cur_ws" != "$ws" ]]; then
+      /opt/homebrew/bin/aerospace move-node-to-workspace "$ws" --window-id "$wid" >/dev/null 2>&1 || true
+      echo "$(date '+%Y-%m-%d %H:%M:%S') restore: window $wid $cur_ws→$ws" >> /tmp/display-center.log 2>&1
+    fi
+  done < /tmp/aerospace-sleep-state
+fi
 # display-center already recenters VNC via its own function, but double-check via aerospace+osascript
 sleep 1
 if pgrep -x "Screen Sharing" >/dev/null 2>&1; then
