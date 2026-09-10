@@ -1,0 +1,58 @@
+#!/bin/bash
+# lid-sleep — force sleep when lid closes even in clamshell (external display connected)
+# Polls AppleClamshellState via ioreg every 2s (via launchd StartInterval 2)
+# When lid closed (Yes) + DELL connected, triggers pmset sleepnow (once per close)
+
+STATE_FILE="/tmp/lid-sleep.state"
+LOG_FILE="/tmp/lid-sleep.log"
+
+# Get lid state: Yes = closed, No = open
+lid_state=$(ioreg -r -k AppleClamshellState -d 4 2>&1 | grep AppleClamshellState | head -n1 | grep -o '"AppleClamshellState" = .*' | cut -d'"' -f4)
+# Alternative parse if grep fails
+if [[ -z "$lid_state" ]]; then
+  lid_state=$(ioreg -r -k AppleClamshellState -d 4 2>&1 | awk -F'"' '/AppleClamshellState/ {print $4; exit}')
+fi
+
+# Default to No if not found (lid open)
+if [[ -z "$lid_state" ]]; then lid_state="No"; fi
+
+# Check if external DELL is connected (2+ displays)
+dell_connected=0
+if displayplacer list 2>&1 | grep -q "27 inch external screen"; then
+  dell_connected=1
+elif displayplacer list 2>&1 | grep -q "external screen"; then
+  dell_connected=1
+else
+  cnt=$(displayplacer list 2>&1 | grep -c "Persistent screen id:" || true)
+  if [[ "$cnt" -gt 1 ]]; then dell_connected=1; fi
+fi
+
+# Only act when lid closed
+if [[ "$lid_state" != "Yes" ]]; then
+  # Lid open — reset state and exit
+  echo "open" > "$STATE_FILE" 2>/dev/null || true
+  exit 0
+fi
+
+# Lid is closed (Yes)
+prev_state=$(cat "$STATE_FILE" 2>/dev/null || echo "open")
+if [[ "$prev_state" == "closed" ]]; then
+  # Already handled this close event, don't spam sleepnow
+  exit 0
+fi
+
+# New close event
+echo "closed" > "$STATE_FILE" 2>/dev/null || true
+echo "$(date '+%Y-%m-%d %H:%M:%S') lid closed (DELL connected=$dell_connected) — forcing sleep" >> "$LOG_FILE" 2>&1
+
+# Only force sleep if we want clamshell disabled (always when lid closed, regardless of DELL)
+# If you want to allow clamshell when DELL connected, add: [[ "$dell_connected" -eq 0 ]] && exit 0
+# But per user request: lid close should always sleep, even with DELL
+# So we sleep unconditionally on lid close
+
+# Try pmset sleepnow first (user-level, no sudo needed on Apple Silicon? may need sudo)
+pmset sleepnow 2>> "$LOG_FILE" || true
+# Fallback via AppleScript (more reliable as user)
+osascript -e 'tell application "System Events" to sleep' 2>> "$LOG_FILE" || true
+
+exit 0

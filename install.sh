@@ -32,6 +32,7 @@ LINKS=(
   "home/.macos:.macos"
   "config/launchd/com.tmux.server.plist:Library/LaunchAgents/com.tmux.server.plist"
   "config/launchd/com.display-center.plist:Library/LaunchAgents/com.display-center.plist"
+  "config/launchd/com.lid-sleep.plist:Library/LaunchAgents/com.lid-sleep.plist"
   "config/karabiner/karabiner.json:.config/karabiner/karabiner.json"
   "home/.wakeup:.wakeup"
   "home/.sleep:.sleep"
