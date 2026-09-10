@@ -175,14 +175,14 @@ gaps.outer.right = [{ monitor."DELL U2715H" = 0 }, 6]
     alt-shift-k = ['join-with up', 'mode main']
     alt-shift-l = ['join-with right', 'mode main']
 
-# Screen Sharing (VNC) — VNC session windows keep on DELL workspace 10, tiling (zero gaps) and fullscreen to fill 2560x1440
-# (chooser and other dialogs stay floating)
+# Screen Sharing (VNC) — VNC sessions stay floating (native 1920x1080, no black inside) on DELL workspace 10
+# (B looked better: floating native vs tiled scaled which left black top/right inside)
 [[on-window-detected]]
 if.app-id = "com.apple.ScreenSharing"
 if.window-title-regex-substring = "Mac mini"
-run = ["move-node-to-workspace 10", "layout tiling", "fullscreen"]
+run = ["layout floating", "move-node-to-workspace 10"]
 
-# Fallback for other Screen Sharing windows (connections chooser, etc.)
+# Fallback for other Screen Sharing windows (chooser, etc.)
 [[on-window-detected]]
 if.app-id = "com.apple.ScreenSharing"
 run = ["layout floating", "move-node-to-workspace 10"]
