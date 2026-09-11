@@ -28,8 +28,10 @@ macos-titlebar-style = "tabs"
 macos-titlebar-proxy-icon = "hidden"
 
 # --- Shell ---
-# Use the default shell (zsh on macOS). You can override if needed:
-# command = /bin/zsh
+# Ghostty auto-attaches to tmux session 'main' (creates if missing).
+# Wrapper at bin/ghostty-tmux guards against nesting (if $TMUX set, just exec shell).
+# Bypass once:  ghostty --command=/bin/zsh  or  open -na Ghostty --args --command=/bin/zsh
+command = /Users/john/Projects/dotfiles/bin/ghostty-tmux
 
 # --- Cursor ---
 cursor-style = "bar"
