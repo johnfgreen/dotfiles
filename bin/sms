@@ -54,13 +54,16 @@ if [[ -n "$encoded_body" ]]; then
   url="${url}&body=${encoded_body}"
 fi
 
-# Open draft in Messages - user hits Send
+# Open draft in Messages - user hits Send (ensure focus so you don't have to switch apps)
 if ! open "$url" 2>/dev/null; then
   echo "Failed to open Messages, copying to clipboard as fallback..." >&2
   printf "%s" "$body" | pbcopy 2>/dev/null || true
   echo "Body copied to clipboard. Phone: $phone" >&2
   exit 1
 fi
+
+# Bring Messages to front
+osascript -e 'tell application "Messages" to activate' -e 'delay 0.3' -e 'tell application "System Events" to set frontmost of process "Messages" to true' >/dev/null 2>&1 || true
 
 echo "Opened Messages draft to $phone" >&2
 # Don't echo body back for privacy (avoid logging)

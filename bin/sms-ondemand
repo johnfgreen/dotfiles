@@ -46,9 +46,16 @@ is_active() {
 if ! is_active; then
   echo "Messages is currently SIGNED OUT (isolated mode)." >&2
   echo "Opening Messages - please sign in with your Apple ID (password + 2FA)..." >&2
-  open -a Messages 2>/dev/null || true
-  # Also open System Settings to Apple ID pane as fallback
-  sleep 1
+  # Ensure Messages is frontmost and Settings is visible (so you don't have to switch apps)
+  osascript -e 'tell application "Messages" to activate' >/dev/null 2>&1 || open -a Messages 2>/dev/null || true
+  sleep 0.5
+  osascript -e 'tell application "System Events" to set frontmost of process "Messages" to true' >/dev/null 2>&1 || true
+  sleep 0.3
+  # Open Settings to iMessage tab
+  osascript -e 'tell application "System Events" to tell process "Messages" to try click menu item "Settings…" of menu "Messages" of menu bar 1' >/dev/null 2>&1 || true
+  sleep 0.5
+  osascript -e 'tell application "Messages" to activate' -e 'tell application "System Events" to set frontmost of process "Messages" to true' >/dev/null 2>&1 || true
+  sleep 0.5
   echo "Waiting for sign-in (checking every 2s, timeout 120s)..." >&2
   for i in $(seq 1 60); do
     if is_active; then
