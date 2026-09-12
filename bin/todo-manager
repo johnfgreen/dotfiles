@@ -2,7 +2,15 @@
 # todo-manager — sync todowrite tasks with persistent opencode-memory
 #
 # Call this from bash immediately after every todowrite call.
-# Usage:  todo-manager <command> [args...]
+# Usage:  todo-manager [--agent <name>] [--memory <path>] <command> [args...]
+#         todo-manager <command> [args...]
+#
+# Per-agent support (mirrors opencode-memory):
+#   todo-manager --agent inclusion-specialist add "Draft audit checklist" --priority high
+#   todo-manager --agent inclusion-specialist status
+#   todo-manager --memory ./.opencode/memory.json status
+#   OPCODE_AGENT=inclusion-specialist todo-manager status
+#   OPCODE_MEMORY_PATH=./memory.json todo-manager status
 #
 # Commands:
 #   add <desc> [--priority high|medium|low]
@@ -25,55 +33,127 @@
 #
 #   close
 #       Finalize session.
+#
+#   get-context, archive, forget, prune, init — passed through directly.
 
 MEMORY_TOOL="$(cd "$(dirname "$0")" && pwd)/opencode-memory"
+
+# Parse global flags --agent and --memory (with or without =), before the command.
+# These are forwarded to opencode-memory; remaining args are the command.
+MEMORY_FLAGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --agent)
+      if [[ -z "${2:-}" ]]; then echo "Error: --agent requires a value" >&2; exit 1; fi
+      MEMORY_FLAGS+=("--agent" "$2")
+      shift 2
+      ;;
+    --agent=*)
+      MEMORY_FLAGS+=("$1")
+      shift
+      ;;
+    --memory)
+      if [[ -z "${2:-}" ]]; then echo "Error: --memory requires a value" >&2; exit 1; fi
+      MEMORY_FLAGS+=("--memory" "$2")
+      shift 2
+      ;;
+    --memory=*)
+      MEMORY_FLAGS+=("$1")
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      # Unknown flag before command — leave for command dispatch to handle
+      break
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 case "${1:-}" in
   add)
     shift
     if [ $# -eq 0 ]; then
-      echo "Usage: todo-manager add <description> [--priority high|medium|low]" >&2
+      echo "Usage: todo-manager [--agent <name>] add <description> [--priority high|medium|low]" >&2
       exit 1
     fi
-    "$MEMORY_TOOL" add-task "$@"
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" add-task "$@"
     ;;
   complete|done)
     shift
     if [ $# -eq 0 ]; then
-      echo "Usage: todo-manager complete <id> [--result \"...\"]" >&2
+      echo "Usage: todo-manager [--agent <name>] complete <id> [--result \"...\"]" >&2
       exit 1
     fi
-    "$MEMORY_TOOL" complete-task "$@"
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" complete-task "$@"
     ;;
   update)
     shift
     if [ $# -eq 0 ]; then
-      echo "Usage: todo-manager update <id> --status in_progress|pending|completed [--notes \"...\"]" >&2
+      echo "Usage: todo-manager [--agent <name>] update <id> --status in_progress|pending|completed [--notes \"...\"]" >&2
       exit 1
     fi
-    "$MEMORY_TOOL" update-task "$@"
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" update-task "$@"
     ;;
   note|add-note)
     shift
     if [ $# -eq 0 ]; then
-      echo "Usage: todo-manager note <text>" >&2
+      echo "Usage: todo-manager [--agent <name>] note <text>" >&2
       exit 1
     fi
-    "$MEMORY_TOOL" add-note "$@"
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" add-note "$@"
     ;;
   status)
-    "$MEMORY_TOOL" status
+    shift
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" status "$@"
+    ;;
+  get-context)
+    shift
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" get-context "$@"
     ;;
   heartbeat)
-    "$MEMORY_TOOL" heartbeat
+    shift
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" heartbeat "$@"
     ;;
   close)
-    "$MEMORY_TOOL" close
+    shift
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" close "$@"
+    ;;
+  init)
+    shift
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" init "$@"
+    ;;
+  archive)
+    shift
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" archive "$@"
+    ;;
+  forget)
+    shift
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" forget "$@"
+    ;;
+  prune)
+    shift
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" prune "$@"
+    ;;
+  # Direct passthrough for any other opencode-memory command (future-proof)
+  add-task|update-task|complete-task|add-note)
+    "$MEMORY_TOOL" "${MEMORY_FLAGS[@]}" "$@"
     ;;
   *)
     echo "todo-manager — sync todowrite tasks with persistent opencode-memory"
     echo ""
-    echo "Usage: todo-manager <command> [args...]"
+    echo "Usage: todo-manager [--agent <name>] [--memory <path>] <command> [args...]"
+    echo ""
+    echo "Per-agent examples:"
+    echo "  todo-manager --agent inclusion-specialist add \"Task\" --priority high"
+    echo "  todo-manager --agent inclusion-specialist status"
+    echo "  todo-manager --agent inclusion-specialist get-context"
+    echo "  OPCODE_AGENT=inclusion-specialist todo-manager status"
     echo ""
     echo "Commands:"
     echo "  add <desc> [--priority high|medium|low]     Add a new task"
@@ -81,8 +161,10 @@ case "${1:-}" in
     echo "  update <id> --status <s> [--notes \"...\"]    Update task status"
     echo "  note <text>                                  Save a context note"
     echo "  status                                       Show memory state"
+    echo "  get-context                                  Compact restore summary"
     echo "  heartbeat                                    Persist checkpoint"
     echo "  close                                        Finalize session"
+    echo "  init | archive | forget | prune              Direct passthrough"
     exit 1
     ;;
 esac

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.display-center</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/john/Projects/dotfiles/bin/display-center</string>
+		<string>--quiet</string>
+	</array>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<!-- Poll every 10s, idempotent — reapplies only if DELL is connected and not centered -->
+	<key>StartInterval</key>
+	<integer>10</integer>
+
+	<key>ProcessType</key>
+	<string>Background</string>
+
+	<key>StandardOutPath</key>
+	<string>/tmp/display-center.log</string>
+
+	<key>StandardErrorPath</key>
+	<string>/tmp/display-center.err.log</string>
+</dict>
+</plist>

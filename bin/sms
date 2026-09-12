@@ -1,0 +1,69 @@
+#!/bin/bash
+# sms - Open macOS Messages with a pre-filled draft via sms://
+# Usage: sms <phone> [message]
+#   phone: E.164 format (+1323...) or 10-digit (3233046084) - will normalize to +1
+#   message: body text (if omitted, opens empty draft to that contact)
+# Privacy: does not store/log phone numbers or message bodies - one-time draft only
+# Requires: macOS Messages app, python3 for URL encoding
+# Notes:
+#   - Uses `open "sms://..."` so user hits Send manually - no Automation permission needed
+#   - For full auto-send via AppleScript, enable: System Settings > Privacy & Security > Automation > allow Terminal/Ghostty to control Messages
+#   - And: System Settings > Notifications > Messages > Time Sensitive Notifications
+set -euo pipefail
+
+usage() {
+  echo "Usage: sms <phone> [message]" >&2
+  echo "  Example: sms 3233046084 \"CBR300R Oil: 2qt 10W-30 JASO MA2, Filter KN-204\"" >&2
+  echo "  Example: sms +13233046084 \"Hello\"" >&2
+  exit 1
+}
+
+if [[ $# -lt 1 ]]; then
+  usage
+fi
+
+raw_phone="$1"
+shift || true
+body="${*:-}"
+
+# Normalize phone: strip spaces/dashes/parens, ensure +1 prefix for US
+phone="$(echo "$raw_phone" | tr -d ' -()')"
+if [[ "$phone" =~ ^[0-9]{10}$ ]]; then
+  phone="+1$phone"
+elif [[ "$phone" =~ ^1[0-9]{10}$ ]]; then
+  phone="+$phone"
+elif [[ "$phone" =~ ^\+[0-9]{11,15}$ ]]; then
+  : # already E.164
+else
+  echo "Warning: phone '$raw_phone' doesn't look like E.164, using as-is" >&2
+fi
+
+# URL-encode body with python3 (more reliable than manual)
+encoded_body=""
+if [[ -n "$body" ]]; then
+  if command -v python3 >/dev/null 2>&1; then
+    encoded_body="$(python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))' "$body")"
+  else
+    # Fallback: basic encoding (space -> %20)
+    encoded_body="${body// /%20}"
+  fi
+fi
+
+url="sms://$phone"
+if [[ -n "$encoded_body" ]]; then
+  url="${url}&body=${encoded_body}"
+fi
+
+# Open draft in Messages - user hits Send (ensure focus so you don't have to switch apps)
+if ! open "$url" 2>/dev/null; then
+  echo "Failed to open Messages, copying to clipboard as fallback..." >&2
+  printf "%s" "$body" | pbcopy 2>/dev/null || true
+  echo "Body copied to clipboard. Phone: $phone" >&2
+  exit 1
+fi
+
+# Bring Messages to front
+osascript -e 'tell application "Messages" to activate' -e 'delay 0.3' -e 'tell application "System Events" to set frontmost of process "Messages" to true' >/dev/null 2>&1 || true
+
+echo "Opened Messages draft to $phone" >&2
+# Don't echo body back for privacy (avoid logging)

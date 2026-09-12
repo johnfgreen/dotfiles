@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-opencode-memory — Persistent memory for the opencode system agent.
+opencode-memory — Persistent memory for opencode agents.
 
 Usage:
   opencode-memory status              Show current memory state
@@ -17,19 +17,53 @@ Usage:
                                  (env: OPCODE_MEMORY_MAX_COMPLETED / MAX_NOTES)
   opencode-memory archive             Move all active objectives to completed (start fresh, keep history)
   opencode-memory forget              Permanently delete all active objectives (no history kept)
+
+Per-agent memory:
+  opencode-memory --agent <name> <command> [args...]
+  opencode-memory --memory <path> <command> [args...]
+
+  Env vars (override defaults, CLI flags override env):
+    OPCODE_MEMORY_PATH  — explicit path to memory JSON
+    OPCODE_AGENT        — agent name (e.g. system, inclusion-specialist)
+                         resolves to ~/.config/opencode/agents/<agent>-memory.json
+                         ("system" → system-memory.json for backward compat)
+
+  Examples:
+    opencode-memory status
+    opencode-memory --agent inclusion-specialist status
+    opencode-memory --agent inclusion-specialist add-task "Draft UDL checklist" --priority high
+    OPCODE_AGENT=inclusion-specialist opencode-memory get-context
+    opencode-memory --memory ./.opencode/memory.json status
+
+  Auto-detection (no flag needed):
+    - If CWD is ~/Projects/inclusion-specialist (or any parent contains
+      .opencode/agents/inclusion-specialist.md or opencode.jsonc with it),
+      defaults to inclusion-specialist memory.
+    - Otherwise checks opencode session DB for recent agent in this directory.
+    - Falls back to system agent ( ~/.config/opencode/agents/system-memory.json ).
+    - Disable with OPCODE_AUTO_DETECT=0.
+
+  Shell integration (dotfiles home/.zshrc):
+    - `opencode --agent X` wrapper exports OPCODE_AGENT=X
+    - chpwd hook sets OPCODE_AGENT=inclusion-specialist when entering
+      ~/Projects/inclusion-specialist, clears on leave.
+    - direnv: .envrc in inclusion-specialist project does the same.
 """
 
 import json
 import os
 import sys
-import time
 from datetime import datetime, timezone
-
-MEMORY_PATH = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
 
 # Pruning limits (configurable via env vars)
 MAX_COMPLETED_TASKS = int(os.environ.get("OPCODE_MEMORY_MAX_COMPLETED", "100"))
 MAX_CONTEXT_NOTES = int(os.environ.get("OPCODE_MEMORY_MAX_NOTES", "20"))
+
+DEFAULT_MEMORY_PATH = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
+AGENT_MEMORY_TEMPLATE = os.path.expanduser("~/.config/opencode/agents/{agent}-memory.json")
+
+# Will be resolved in main() before loading
+MEMORY_PATH = DEFAULT_MEMORY_PATH
 
 SHELL = {
     "schema_version": 1,
@@ -45,6 +79,158 @@ SHELL = {
 
 def _now():
     return datetime.now(timezone.utc).isoformat()
+
+
+def _auto_detect_agent():
+    """Try to infer agent from PWD, project config, or recent opencode session.
+    Returns agent name or None."""
+    # Allow disabling via env
+    if os.environ.get("OPCODE_AUTO_DETECT", "1") == "0":
+        return None
+    try:
+        cwd = os.getcwd()
+    except Exception:
+        return None
+
+    # 1. Direct PWD match for known projects
+    inclusion_path = os.path.expanduser("~/Projects/inclusion-specialist")
+    if cwd == inclusion_path or cwd.startswith(inclusion_path + os.sep):
+        return "inclusion-specialist"
+
+    # 2. Walk up looking for opencode.jsonc or .opencode/agents marker
+    cur = cwd
+    for _ in range(12):
+        # Check opencode.jsonc in this dir
+        candidate = os.path.join(cur, "opencode.jsonc")
+        if os.path.exists(candidate):
+            try:
+                with open(candidate, "r") as f:
+                    content = f.read()
+                    if "inclusion-specialist" in content:
+                        return "inclusion-specialist"
+            except Exception:
+                pass
+        # Check .opencode/agents/inclusion-specialist.md
+        agent_marker = os.path.join(cur, ".opencode", "agents", "inclusion-specialist.md")
+        if os.path.exists(agent_marker):
+            return "inclusion-specialist"
+        # Check for project-local memory file hint
+        if os.path.exists(os.path.join(cur, ".opencode", "memory.json")):
+            # If this project has its own memory.json and also global inclusion memory exists, prefer inclusion
+            if os.path.exists(os.path.expanduser("~/.config/opencode/agents/inclusion-specialist-memory.json")):
+                # Only return if this dir looks like inclusion-specialist (avoid false positives for other projects)
+                if "inclusion-specialist" in cur:
+                    return "inclusion-specialist"
+        parent = os.path.dirname(cur)
+        if parent == cur or parent == "/":
+            break
+        cur = parent
+
+    # 3. Check opencode session DB for the *most recent* session in this exact directory.
+    #    This handles `/agent inclusion-specialist` switches: when you Tabs-switch agents in the TUI,
+    #    the session row's `agent` is updated, so the next shell tool in that same directory should
+    #    route to the new agent's memory. We only look at the single most recent session for this cwd
+    #    (exact match), not any recent non-system session — otherwise an old inclusion session would
+    #    incorrectly shadow a newer system session.
+    try:
+        import sqlite3
+
+        db_path = os.path.expanduser("~/.local/share/opencode/opencode.db")
+        if os.path.exists(db_path):
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            cur_db = conn.cursor()
+            cur_db.execute("SELECT agent FROM session WHERE directory = ? ORDER BY time_updated DESC LIMIT 1", (cwd,))
+            row = cur_db.fetchone()
+            conn.close()
+            if row and row[0] and row[0] != "system":
+                agent = row[0]
+                # Validate memory file exists or agent is known
+                if agent == "inclusion-specialist":
+                    return agent
+                mem_path = os.path.expanduser(f"~/.config/opencode/agents/{agent}-memory.json")
+                if os.path.exists(mem_path):
+                    return agent
+                # Even if file doesn't exist yet, still route (it will be created on init)
+                return agent
+    except Exception:
+        pass
+    return None
+
+
+def _resolve_memory_path(argv):
+    """Resolve MEMORY_PATH from env vars and CLI flags. Mutates argv to remove handled flags.
+    Returns the resolved path and the cleaned argv."""
+    global MEMORY_PATH
+    path = None
+    flag_given = False
+
+    # 1. Env var OPCODE_MEMORY_PATH takes precedence over OPCODE_AGENT
+    if os.environ.get("OPCODE_MEMORY_PATH"):
+        path = os.path.expanduser(os.environ["OPCODE_MEMORY_PATH"])
+        flag_given = True
+    elif os.environ.get("OPCODE_AGENT"):
+        agent = os.environ["OPCODE_AGENT"].strip()
+        if agent == "system":
+            path = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
+        else:
+            # sanitize agent name to avoid path traversal
+            safe = agent.replace("/", "-").replace("\\", "-")
+            path = os.path.expanduser(f"~/.config/opencode/agents/{safe}-memory.json")
+        flag_given = True
+    else:
+        path = DEFAULT_MEMORY_PATH
+
+    # 2. CLI flags override env vars — scan argv for --agent and --memory
+    cleaned = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--agent" and i + 1 < len(argv):
+            agent = argv[i + 1].strip()
+            if agent == "system":
+                path = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
+            else:
+                safe = agent.replace("/", "-").replace("\\", "-")
+                path = os.path.expanduser(f"~/.config/opencode/agents/{safe}-memory.json")
+            flag_given = True
+            i += 2
+            continue
+        elif arg == "--memory" and i + 1 < len(argv):
+            path = os.path.expanduser(argv[i + 1])
+            flag_given = True
+            i += 2
+            continue
+        elif arg.startswith("--agent="):
+            agent = arg.split("=", 1)[1].strip()
+            if agent == "system":
+                path = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
+            else:
+                safe = agent.replace("/", "-").replace("\\", "-")
+                path = os.path.expanduser(f"~/.config/opencode/agents/{safe}-memory.json")
+            flag_given = True
+            i += 1
+            continue
+        elif arg.startswith("--memory="):
+            path = os.path.expanduser(arg.split("=", 1)[1])
+            flag_given = True
+            i += 1
+            continue
+        else:
+            cleaned.append(arg)
+            i += 1
+
+    # 3. Auto-detect from PWD / project / recent session if nothing explicit was given
+    if not flag_given and path == DEFAULT_MEMORY_PATH:
+        auto = _auto_detect_agent()
+        if auto:
+            if auto == "system":
+                path = os.path.expanduser("~/.config/opencode/agents/system-memory.json")
+            else:
+                safe = auto.replace("/", "-").replace("\\", "-")
+                path = os.path.expanduser(f"~/.config/opencode/agents/{safe}-memory.json")
+
+    MEMORY_PATH = path
+    return cleaned
 
 
 def _load():
@@ -83,6 +269,8 @@ def _prune(data, silent=False):
 
 def _save(data):
     data["last_updated"] = _now()
+    # ensure directory exists
+    os.makedirs(os.path.dirname(MEMORY_PATH), exist_ok=True)
     with open(MEMORY_PATH, "w") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.write("\n")
@@ -105,7 +293,7 @@ def _next_id(data):
 
 
 def cmd_status(data, args=None):
-    print("=== opencode Memory ===")
+    print(f"=== opencode Memory [{MEMORY_PATH}] ===")
     print(f"Session count: {data.get('session_count', 0)}")
     print(f"Last updated:  {data.get('last_updated', 'never')}")
     print(f"Last session:  {data.get('last_session_end', 'never')}")
@@ -133,10 +321,10 @@ def cmd_status(data, args=None):
 
 def cmd_init(data, args=None):
     if os.path.exists(MEMORY_PATH):
-        print("Memory file already exists.")
+        print(f"Memory file already exists: {MEMORY_PATH}")
     else:
         _save(dict(SHELL))
-        print("Initialized memory file.")
+        print(f"Initialized memory file: {MEMORY_PATH}")
 
 
 def cmd_add_task(data, args):
@@ -167,7 +355,7 @@ def cmd_add_task(data, args):
     }
     data.setdefault("active_objectives", []).append(task)
     _save(data)
-    print(f"Added task {oid}: [{priority}] {desc}")
+    print(f"Added task {oid}: [{priority}] {desc} → {MEMORY_PATH}")
 
 
 def cmd_update_task(data, args):
@@ -214,7 +402,7 @@ def cmd_update_task(data, args):
         found["notes"] = notes_val
 
     _save(data)
-    print(f"Updated {tid}: status={status_val or 'unchanged'}, notes={notes_val or 'unchanged'}")
+    print(f"Updated {tid}: status={status_val or 'unchanged'}, notes={notes_val or 'unchanged'} → {MEMORY_PATH}")
 
 
 def cmd_complete_task(data, args):
@@ -281,7 +469,7 @@ def cmd_get_context(data, args=None):
 def cmd_heartbeat(data, args=None):
     _prune(data)
     _save(data)
-    print(f"Heartbeat: {data['last_updated']}")
+    print(f"Heartbeat: {data['last_updated']} → {MEMORY_PATH}")
 
 
 def cmd_archive(data, args=None):
@@ -349,9 +537,17 @@ def main():
         print(__doc__.strip())
         sys.exit(1)
 
+    # Resolve memory path first, handling --agent / --memory flags + env vars
+    raw_args = sys.argv[1:]
+    cleaned_args = _resolve_memory_path(raw_args)
+
+    if not cleaned_args:
+        print(__doc__.strip())
+        sys.exit(1)
+
     data = _load()
-    cmd = sys.argv[1]
-    args = sys.argv[2:]
+    cmd = cleaned_args[0]
+    args = cleaned_args[1:]
 
     commands = {
         "status": cmd_status,

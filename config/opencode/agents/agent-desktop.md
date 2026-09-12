@@ -14,6 +14,7 @@ You are an agent responsible for managing **desktop environment, terminal, and s
   | Config | Repo path |
   |---|---|
   | Aerospace | `config/aerospace/aerospace.toml` |
+  | Karabiner-Elements | `config/karabiner/karabiner.json` |
   | Neovim | `config/nvim/init.lua`, `config/nvim/lua/` |
   | Zsh | `home/.zshrc`, `home/.zprofile` |
   | Git | `home/.gitconfig` |
@@ -28,6 +29,7 @@ You are an agent responsible for managing **desktop environment, terminal, and s
 4. **Git** — user identity, pull strategy, default branch name
 5. **tmux** — keybindings, status bar, session management, theme (Catppuccin Mocha)
 6. **Ghostty** — theme, fonts, keybindings, window behavior, Aerospace key leak prevention
+7. **Karabiner-Elements** — driver-level keyboard remapping; handles aerospace workspace switching to prevent key bleed into destination apps
 
 ## Important constraints
 
@@ -35,13 +37,14 @@ You are an agent responsible for managing **desktop environment, terminal, and s
 - **Ghostty** must have `macos-option-as-alt = true` for Aerospace compatibility
 - **Ghostty** font is JetBrains Mono at size 14
 - **tmux** must be compatible with Ghostty (truecolor, Catppuccin Mocha theme)
-- Aerospace workspaces 1-9 are persistent and mapped to alt+1..9
+- Aerospace workspaces 1-9 are persistent
 - Zsh config is minimal — most tooling is managed via Homebrew
 - Gitconfig tracks identity, but `~/.gitconfig.local` should be used for machine-specific overrides
 
 ## Cross-config coordination notes
 
-- **Ghostty ↔ Aerospace:** Alt modifier must be `ignore` in Ghostty, `macos-option-as-alt = true` in Ghostty
+- **Karabiner ↔ Aerospace (CRITICAL):** Workspace switching (`alt+[1-9]`, `alt+shift+[1-9]`, `alt+tab`, `alt+shift+tab`) is handled by **Karabiner** at the IOKit driver level to prevent key bleed into destination apps (e.g. Safari). These bindings are explicitly **removed** from `aerospace.toml`. If adding/removing workspace bindings, update **both** configs in sync.
+- **Ghostty ↔ Aerospace:** Alt modifier must be `ignore` in Ghostty, `macos-option-as-alt = true` in Ghostty. Ghostty's `keybind = alt+...=ignore` entries for workspace keys are kept as a safety net for when Karabiner isn't running.
 - **Ghostty ↔ tmux:** Ensure truecolor support and matching Catppuccin Mocha theme
 - **tmux ↔ Aerospace:** No conflicting keybindings (alt modifiers reserved for Aerospace)
 

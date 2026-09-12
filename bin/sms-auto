@@ -1,0 +1,29 @@
+#!/bin/bash
+# sms-auto - Automatically send via Messages AppleScript (requires Automation permission)
+# Usage: sms-auto <phone> <message>
+# Privacy: one-time send, does not persist numbers
+set -euo pipefail
+if [[ $# -lt 2 ]]; then
+  echo "Usage: sms-auto <phone> <message>" >&2; exit 1
+fi
+raw_phone="$1"; shift; body="$*"
+phone="$(echo "$raw_phone" | tr -d ' -()')"
+if [[ "$phone" =~ ^[0-9]{10}$ ]]; then phone="+1$phone"; elif [[ "$phone" =~ ^1[0-9]{10}$ ]]; then phone="+$phone"; fi
+# Try iMessage first, then SMS
+osascript 2>&1 <<EOF
+tell application "Messages"
+  try
+    set svc to 1st service whose service type = iMessage
+    send "$body" to buddy "$phone" of svc
+    return "sent iMessage"
+  on error err1
+    try
+      set svc2 to 1st service whose service type = SMS
+      send "$body" to buddy "$phone" of svc2
+      return "sent SMS"
+    on error err2
+      return "failed: " & err1 & " / " & err2
+    end try
+  end try
+end tell
+EOF

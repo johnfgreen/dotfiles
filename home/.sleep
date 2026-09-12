@@ -1,0 +1,6 @@
+#!/bin/bash
+# ~/.sleep — run by sleepwatcher before sleep (lid close)
+echo "$(date '+%Y-%m-%d %H:%M:%S') sleep: lid closing" >> /tmp/display-center.log
+# Save current window→workspace mapping to restore after wake (prevents collapse to workspace 1)
+/opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{workspace}' 2>/dev/null | grep -v "^$" > /tmp/aerospace-sleep-state 2>&1 || true
+echo "saved $(wc -l < /tmp/aerospace-sleep-state 2>/dev/null | tr -d ' ') windows" >> /tmp/display-center.log 2>&1 || true

@@ -1,0 +1,355 @@
+#!/usr/bin/env bash
+# display-center — arrange DELL U2715H centered above MacBook Air
+# Part of dotfiles/bin (in PATH via ~/Projects/dotfiles/bin)
+#
+# Usage: display-center [--macbook-main|--external-main|--side-by-side|--status|--help] [--dry-run] [--quiet]
+#
+# Default: --macbook-main (DELL centered above, MacBook stays main/menubar at 0,0)
+#   DELL 2560x1440 at (-545,-1440) | MacBook 1470x956 at (0,0)  =>  (2560-1470)/2=545
+#
+# Alternative --external-main: DELL becomes primary at (0,0), MacBook at (545,1440) (no negatives)
+# Revert --side-by-side: DELL to the right at (1470,0)
+#
+# Auto-reapply: intended to be run via launchd every 10s (idempotent) and at login.
+#   When run with --quiet (launchd), only logs when it actually changes arrangement.
+
+set -euo pipefail
+
+# Known persistent IDs (from displayplacer list on 2026-09-09, M2 MacBook Air + DELL U2715H)
+# Used as fallback if dynamic detection fails.
+FALLBACK_MACBOOK_ID="37D8832A-2D66-02CA-B9F7-8F30A301B230"
+FALLBACK_DELL_ID="2890B8F3-B979-45DA-B7FD-132837A10BA9"
+
+DRY_RUN=""
+QUIET=""
+MODE="macbook-main"
+
+for arg in "$@"; do
+  case "$arg" in
+    --external-main) MODE="external-main" ;;
+    --macbook-main) MODE="macbook-main" ;;
+    --side-by-side|--side) MODE="side-by-side" ;;
+    --status) MODE="status" ;;
+    --dry-run) DRY_RUN=1 ;;
+    --quiet|-q) QUIET=1 ;;
+    --help|-h) MODE="help" ;;
+    *) echo "Unknown arg: $arg (try --help)" >&2; exit 1 ;;
+  esac
+done
+
+have_displayplacer() { command -v displayplacer >/dev/null 2>&1; }
+
+# Try to auto-install displayplacer via Homebrew if missing (idempotent)
+ensure_displayplacer() {
+  if have_displayplacer; then return 0; fi
+  if [[ -n "${QUIET:-}" ]]; then return 1; fi
+  echo "displayplacer not found, installing via Homebrew..." >&2
+  if command -v brew >/dev/null 2>&1; then
+    brew install displayplacer
+  else
+    echo "Error: brew not found, cannot install displayplacer. Install manually: brew install displayplacer" >&2
+    exit 1
+  fi
+}
+
+print_help() {
+  cat <<'HELP'
+display-center — DELL U2715H centered above MacBook Air (1470x956) manager
+
+USAGE
+  display-center [OPTION]
+
+OPTIONS
+  (default) --macbook-main   DELL (-545,-1440) centered above, MacBook (0,0) stays main
+            --external-main  DELL (0,0) primary/menubar, MacBook (545,1440) below
+            --side-by-side   DELL (1470,0) to the right of MacBook (factory)
+            --status         show current displayplacer arrangement
+            --dry-run        print the displayplacer command without executing
+            --quiet          only output when changing (for launchd)
+            --help           this help
+
+EXAMPLES
+  display-center                          # centered-below, MacBook main
+  display-center --external-main          # centered-below, DELL main (Dock on DELL)
+  display-center --side-by-side           # revert
+  display-center --status                 # show current
+  display-center --dry-run --external-main
+
+LAUNCHD (auto-reapply on dock/reconnect)
+  A LaunchAgent at ~/Library/LaunchAgents/com.display-center.plist runs:
+    display-center --quiet  # every 10s + at login, idempotent
+  Logs: /tmp/display-center.log , /tmp/display-center.err.log
+  Manage: launchctl list | grep display-center
+          launchctl unload ~/Library/LaunchAgents/com.display-center.plist
+          launchctl load ~/Library/LaunchAgents/com.display-center.plist
+
+IDS
+  Persistent IDs saved from your hardware; script also auto-detects by Type:
+    MacBook: "MacBook built in screen" (1470x956)
+    DELL:    "27 inch external screen" (2560x1440)
+  If Apple changes IDs, detection falls back to type matching.
+HELP
+}
+
+# Dynamic detection: parse `displayplacer list` and find IDs by Type
+# Outputs: MACBOOK_ID DELL_ID (space separated) or fallback if not found
+detect_ids() {
+  local list
+  list="$(displayplacer list 2>&1 || true)"
+  # Extract persistent IDs + following Type lines
+  # Block format: Persistent screen id: X\n ... Type: Y\n
+  local macbook_id="" dell_id=""
+  # Use awk to walk blocks
+  # We collect id when we see Persistent screen id, then check next Type
+  local current_id=""
+  while IFS= read -r line; do
+    if [[ "$line" == "Persistent screen id: "* ]]; then
+      current_id="${line#Persistent screen id: }"
+    elif [[ "$line" == "Type: "* ]]; then
+      if [[ "$line" == *"MacBook built in screen"* ]]; then
+        macbook_id="$current_id"
+      elif [[ "$line" == *"27 inch external screen"* ]] || [[ "$line" == *"external screen"* ]]; then
+        dell_id="$current_id"
+      fi
+      current_id=""
+    fi
+  done <<< "$list"
+
+  # Fallbacks
+  if [[ -z "$macbook_id" ]]; then macbook_id="$FALLBACK_MACBOOK_ID"; fi
+  if [[ -z "$dell_id" ]]; then dell_id="$FALLBACK_DELL_ID"; fi
+
+  echo "$macbook_id $dell_id"
+}
+
+get_current_origins() {
+  displayplacer list 2>&1 | grep -E "Persistent screen id:|Origin:"
+}
+
+do_status() {
+  if ! have_displayplacer; then
+    echo "displayplacer not installed (brew install displayplacer)" >&2
+    exit 1
+  fi
+  echo "== displayplacer list =="
+  displayplacer list
+}
+
+# Idempotent apply: check if already in desired state, skip unless forced
+is_already_centered_macbook_main() {
+  local list
+  list="$(displayplacer list 2>&1 || true)"
+  # Look for exact origins
+  if echo "$list" | grep -q "Origin: (0,0) - main display" && echo "$list" | grep -q "Origin: (-545,-1440)"; then
+    return 0
+  else
+    return 1
+  fi
+}
+is_already_centered_external_main() {
+  local list
+  list="$(displayplacer list 2>&1 || true)"
+  if echo "$list" | grep -q "Origin: (0,0) - main display" && echo "$list" | grep -q "Origin: (545,1440)"; then
+    # Need to verify which is which: main should be DELL in this mode.
+    # Check that DELL is at 0,0 by looking at order: DELL block has 0,0
+    # Simpler: check both origins exist
+    return 0
+  fi
+  # Actually check more precisely: both origins present
+  if echo "$list" | grep -q "Origin: (0,0)" && echo "$list" | grep -q "Origin: (545,1440)"; then
+    return 0
+  fi
+  return 1
+}
+
+apply_macbook_main() {
+  local macbook_id="$1" dell_id="$2"
+  if [[ -n "${QUIET:-}" ]] && is_already_centered_macbook_main; then
+    return 0
+  fi
+  local cmd=(displayplacer
+    "id:${macbook_id} res:1470x956 hz:60 color_depth:8 enabled:true scaling:on origin:(0,0) degree:0"
+    "id:${dell_id} res:2560x1440 hz:60 color_depth:8 enabled:true scaling:off origin:(-545,-1440) degree:0"
+  )
+  if [[ -n "${DRY_RUN:-}" ]]; then
+    echo "[dry-run] ${cmd[*]}"
+    return 0
+  fi
+  if [[ -z "${QUIET:-}" ]]; then
+    echo "Applying centered-below (MacBook main): MacBook (0,0) + DELL (-545,-1440)"
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Applying centered-below (MacBook main): MacBook (0,0) + DELL (-545,-1440)"
+  fi
+  "${cmd[@]}"
+  if [[ -z "${QUIET:-}" ]]; then
+    echo "Done. Verify: display-center --status"
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Done."
+  fi
+}
+
+apply_external_main() {
+  local macbook_id="$1" dell_id="$2"
+  if [[ -n "${QUIET:-}" ]] && is_already_centered_external_main; then
+    return 0
+  fi
+  local cmd=(displayplacer
+    "id:${dell_id} res:2560x1440 hz:60 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0"
+    "id:${macbook_id} res:1470x956 hz:60 color_depth:8 enabled:true scaling:on origin:(545,1440) degree:0"
+  )
+  if [[ -n "${DRY_RUN:-}" ]]; then
+    echo "[dry-run] ${cmd[*]}"
+    return 0
+  fi
+  if [[ -z "${QUIET:-}" ]]; then
+    echo "Applying centered-below (DELL primary): DELL (0,0) + MacBook (545,1440) — Dock/menubar moves to DELL"
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Applying centered-below (DELL primary): DELL (0,0) + MacBook (545,1440)"
+  fi
+  "${cmd[@]}"
+  if [[ -z "${QUIET:-}" ]]; then
+    echo "Done."
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Done."
+  fi
+}
+
+apply_side_by_side() {
+  local macbook_id="$1" dell_id="$2"
+  local cmd=(displayplacer
+    "id:${macbook_id} res:1470x956 hz:60 color_depth:8 enabled:true scaling:on origin:(0,0) degree:0"
+    "id:${dell_id} res:2560x1440 hz:60 color_depth:8 enabled:true scaling:off origin:(1470,0) degree:0"
+  )
+  if [[ -n "${DRY_RUN:-}" ]]; then
+    echo "[dry-run] ${cmd[*]}"
+    return 0
+  fi
+  if [[ -z "${QUIET:-}" ]]; then
+    echo "Applying side-by-side (DELL to right): MacBook (0,0) + DELL (1470,0)"
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Applying side-by-side: MacBook (0,0) + DELL (1470,0)"
+  fi
+  "${cmd[@]}"
+}
+
+# Main
+if [[ "$MODE" == "help" ]]; then
+  print_help
+  exit 0
+fi
+
+if [[ "$MODE" == "status" ]]; then
+  do_status
+  exit 0
+fi
+
+if ! have_displayplacer; then
+  ensure_displayplacer
+  if ! have_displayplacer; then
+    echo "displayplacer still not found; aborting" >&2
+    exit 1
+  fi
+fi
+
+# --- VNC window recenter — display-aware ---
+# DELL connected: 1920x1132 at -225,-1286 centered on DELL (B preference)
+# DELL unplugged (Air only 1470x956): 1470x878 at 0,39 centered on Air (full-width, no overflow)
+# Runs every invocation (launchd 10s + wake), idempotent, no assistive-access needed for launchd
+recenter_vnc() {
+  if ! pgrep -x "Screen Sharing" >/dev/null 2>&1; then return 0; fi
+  if ! /opt/homebrew/bin/aerospace list-windows --all --format '%{window-title}' 2>&1 | grep -q "Mac mini"; then
+    return 0
+  fi
+  local dell_connected=0
+  if displayplacer list 2>&1 | grep -q "27 inch external screen"; then
+    dell_connected=1
+  elif displayplacer list 2>&1 | grep -q "external screen"; then
+    local cnt
+    cnt=$(displayplacer list 2>&1 | grep -c "Persistent screen id:" || true)
+    if [[ "$cnt" -gt 1 ]]; then dell_connected=1; fi
+  fi
+  local exp_pos exp_size exp_log
+  if [[ "$dell_connected" -eq 1 ]]; then
+    exp_pos="-225,-1286"
+    exp_size="1920,1132"
+    exp_log="-225,-1286 1920x1132 (DELL centered)"
+  else
+    exp_pos="0,39"
+    exp_size="1470,878"
+    exp_log="0,39 1470x878 (Air centered, DELL unplugged)"
+  fi
+  local exp_x exp_y exp_w exp_h
+  IFS=',' read -r exp_x exp_y <<< "$(echo "$exp_pos" | tr -d ' ')"
+  IFS=',' read -r exp_w exp_h <<< "$(echo "$exp_size" | tr -d ' ')"
+  local cur
+  cur=$(osascript -e 'tell application "Screen Sharing" to get {position of window 1, size of window 1}' 2>&1 || echo "fail")
+  if [[ "$cur" == *"fail"* ]] || [[ -z "$cur" ]] || [[ "$cur" == *"error"* ]]; then
+    cur=$(osascript -e 'tell application "System Events" to tell process "Screen Sharing" to get {position of window 1, size of window 1}' 2>&1 || echo "fail")
+    if [[ "$cur" == *"fail"* ]] || [[ -z "$cur" ]] || [[ "$cur" == *"not allowed"* ]]; then return 0; fi
+  fi
+  local pos_size
+  pos_size=$(echo "$cur" | tr -d ' ' )
+  local exp_pos_size="${exp_pos},${exp_size}"
+  exp_pos_size=$(echo "$exp_pos_size" | tr -d ' ')
+  if [[ "$pos_size" == "$exp_pos_size" ]]; then
+    if ! /opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{workspace} %{window-layout}' 2>&1 | grep -q "Screen Sharing.*10.*floating"; then
+      local wid
+      wid=$(/opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{app-name}' 2>&1 | grep "Screen Sharing" | awk '{print $1}' | head -n1)
+      if [[ -n "$wid" ]]; then
+        /opt/homebrew/bin/aerospace layout floating --window-id "$wid" >/dev/null 2>&1 || true
+        /opt/homebrew/bin/aerospace move-node-to-workspace 10 --window-id "$wid" >/dev/null 2>&1 || true
+      fi
+    fi
+    return 0
+  fi
+  local log_cur="$cur"
+  if [[ "$log_cur" == *"execution error"* ]]; then log_cur="error"; fi
+  if [[ -z "${QUIET:-}" ]]; then
+    echo "Recentering VNC window to $exp_log (was $log_cur)"
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Recentering VNC window to $exp_log (was $log_cur)"
+  fi
+  local wid
+  wid=$(/opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{app-name}' 2>&1 | grep "Screen Sharing" | awk '{print $1}' | head -n1)
+  if [[ -n "$wid" ]]; then
+    /opt/homebrew/bin/aerospace layout floating --window-id "$wid" >/dev/null 2>&1 || true
+    /opt/homebrew/bin/aerospace move-node-to-workspace 10 --window-id "$wid" >/dev/null 2>&1 || true
+  fi
+  osascript -e "tell application \"Screen Sharing\" to try
+    set position of window 1 to {$exp_x, $exp_y}
+    set size of window 1 to {$exp_w, $exp_h}
+  end try" >/dev/null 2>&1 || true
+  osascript -e "tell application \"System Events\" to tell process \"Screen Sharing\" to try
+    tell window 1
+      set position to {$exp_x, $exp_y}
+      set size to {$exp_w, $exp_h}
+    end tell
+  end try" >/dev/null 2>&1 || true
+}
+
+# Detect if external is even connected
+DELL_CONNECTED=1
+if ! displayplacer list 2>&1 | grep -q "27 inch external screen"; then
+  if ! displayplacer list 2>&1 | grep -q "external screen"; then
+    count=$(displayplacer list 2>&1 | grep -c "Persistent screen id:" || true)
+    if [[ "$count" -le 1 ]]; then
+      DELL_CONNECTED=0
+      if [[ -z "${QUIET:-}" ]]; then
+        echo "Only internal display detected (DELL not connected). Nothing to arrange." >&2
+        displayplacer list 2>&1 | grep -E "Persistent|Type:|Resolution:|Origin:" || true
+      fi
+    fi
+  fi
+fi
+
+if [[ "$DELL_CONNECTED" -eq 1 ]]; then
+  read -r MACBOOK_ID DELL_ID <<< "$(detect_ids)"
+  case "$MODE" in
+    macbook-main) apply_macbook_main "$MACBOOK_ID" "$DELL_ID" ;;
+    external-main) apply_external_main "$MACBOOK_ID" "$DELL_ID" ;;
+    side-by-side) apply_side_by_side "$MACBOOK_ID" "$DELL_ID" ;;
+  esac
+fi
+
+# Always recenter VNC (display-aware: chooses DELL vs Air position internally)
+recenter_vnc || true

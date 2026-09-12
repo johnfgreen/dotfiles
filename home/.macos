@@ -1,0 +1,33 @@
+#!/usr/bin/env zsh
+#
+# ~/.macos — macOS system defaults
+# Applied on shell start via .zshrc.
+# Run manually after macOS updates: source ~/.macos
+#
+# These settings are idempotent — safe to run repeatedly.
+#
+
+# ============================================================================
+# Dock
+# ============================================================================
+
+# ============================================================================
+# Window manager / corners
+# ============================================================================
+
+# Reduce window corner radius from Tahoe default (26pt) to a near-square (6pt)
+# This makes Safari window corners visually align with Ghostty's square corners.
+# Values: 0=square(⚠artifacts), 4/6=nearly square, 10=Sequoia-style, 26=Tahoe default
+defaults write -g NSConvolutionOverride1 -float 6
+
+# ============================================================================
+# Trackpad / Keyboard
+# ============================================================================
+
+# ============================================================================
+# Finder
+# ============================================================================
+
+# ============================================================================
+# Safari
+# ============================================================================

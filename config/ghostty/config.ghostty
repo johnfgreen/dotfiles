@@ -28,8 +28,10 @@ macos-titlebar-style = "tabs"
 macos-titlebar-proxy-icon = "hidden"
 
 # --- Shell ---
-# Use the default shell (zsh on macOS). You can override if needed:
-# command = /bin/zsh
+# Ghostty auto-attaches to tmux session 'main' (creates if missing).
+# Wrapper at bin/ghostty-tmux guards against nesting (if $TMUX set, just exec shell).
+# Bypass once:  ghostty --command=/bin/zsh  or  open -na Ghostty --args --command=/bin/zsh
+command = /Users/john/Projects/dotfiles/bin/ghostty-tmux
 
 # --- Cursor ---
 cursor-style = "bar"
@@ -42,20 +44,29 @@ mouse-hide-while-typing = true
 # Aerospace uses `alt` (Option) as its primary modifier, which creates a
 # conflict: Ghostty and Aerospace both want the Option key.
 #
-# Strategy:
-#   macos-option-as-alt = true
+# Strategy (4 layers, top-down):
+#
+#   Layer 1: Karabiner-Elements (driver-level)
+#     Intercepts alt+1..9, alt+shift+1..9, alt+tab, alt+shift+tab,
+#     alt+h/j/k/l (focus), and alt+shift+h/j/k/l (move) at the IOKit
+#     driver level, consuming the events before macOS delivers them to
+#     any app. Runs the corresponding `aerospace` command via shell_command.
+#     Config: ~/.config/karabiner/karabiner.json
+#     This is the PRIMARY defense against key bleed into destination apps.
+#
+#   Layer 2 (Ghostty): macos-option-as-alt = true
 #     Makes Option act as Meta (Escape+key) instead of sending Unicode chars.
 #     So if a key DOES leak through, the shell gets "\ez" instead of "Ω".
 #     The shell echoes "z" harmlessly instead of inserting a weird Unicode glyph.
 #     ⚠ REQUIRES A FULL RESTART OF GHOSTTY — config reload isn't enough.
 #
-#   macos-auto-secure-input = false
+#   Layer 3 (Ghostty): macos-auto-secure-input = false
 #     Prevents Ghostty from grabbing exclusive keyboard access, so Aerospace
 #     can still intercept alt+key combos via Accessibility APIs.
 #
-#   Explicit keybind = alt+...=ignore for every key Aerospace uses.
-#     This is the only bulletproof way to block leaks while preserving shell
-#     shortcuts like alt+b/f/d (backward/forward word in zsh).
+#   Layer 4 (Ghostty): Explicit keybind = alt+...=ignore
+#     Safety net for any events that bypass the above layers. These bindings
+#     preserve shell shortcuts like alt+b/f/d (backward/forward word in zsh).
 
 macos-auto-secure-input = false
 macos-option-as-alt = true
@@ -86,12 +97,15 @@ keybind = cmd+shift+,=reload_config
 # Toggle fullscreen
 keybind = ctrl+cmd+f=toggle_fullscreen
 
-# --- Aerospace Key Leak Prevention ---
-# Aerospace's mode.main bindings vs. Ghostty — each alt+key that Aerospace
-# claims must be `ignore`d in Ghostty so it doesn't leak to the terminal.
+# --- Aerospace Key Leak Prevention (Ghostty safety net) ---
+# These `ignore` bindings are Layer 4 of the strategy — they catch any
+# alt+key events that bypass Karabiner (Layer 1) and Ghostty's option
+# handling (Layers 2-3). Most of these (digits, h/j/k/l) are already
+# consumed by Karabiner at the driver level, but the Ghostty safety net
+# ensures zero bleed even if Karabiner is temporarily absent.
 # Shell shortcuts (alt+b/f/d) are left unbound so they pass through normally.
 
-# Focus: alt+h/j/k/l
+# Focus + move: alt+h/j/k/l, alt+shift+h/j/k/l (Karabiner-handled at driver level)
 keybind = alt+h=ignore
 keybind = alt+j=ignore
 keybind = alt+k=ignore
@@ -107,7 +121,7 @@ keybind = alt+shift+l=ignore
 keybind = alt+minus=ignore
 keybind = alt+equal=ignore
 
-# Workspace: alt+1..9
+# Workspace: alt+1..9, alt+0 = 10
 keybind = alt+1=ignore
 keybind = alt+2=ignore
 keybind = alt+3=ignore
@@ -117,8 +131,9 @@ keybind = alt+6=ignore
 keybind = alt+7=ignore
 keybind = alt+8=ignore
 keybind = alt+9=ignore
+keybind = alt+0=ignore
 
-# Move to workspace: alt+shift+1..9
+# Move to workspace: alt+shift+1..9, alt+shift+0 = 10
 keybind = alt+shift+1=ignore
 keybind = alt+shift+2=ignore
 keybind = alt+shift+3=ignore
@@ -128,6 +143,7 @@ keybind = alt+shift+6=ignore
 keybind = alt+shift+7=ignore
 keybind = alt+shift+8=ignore
 keybind = alt+shift+9=ignore
+keybind = alt+shift+0=ignore
 
 # Other Aerospace: tab, slash, comma, semicolon
 keybind = alt+tab=ignore

@@ -1,0 +1,53 @@
+#!/bin/bash
+# ~/.wakeup — run by sleepwatcher after wake (lid open)
+# Re-apply display-center and VNC position immediately (faster than 10s polling)
+sleep 2
+/Users/john/Projects/dotfiles/bin/display-center --quiet >/tmp/display-center.log 2>&1 || true
+# Restore window→workspace mapping saved at sleep (fixes collapse to workspace 1)
+sleep 1
+if [[ -f /tmp/aerospace-sleep-state ]]; then
+  while read -r wid ws; do
+    [[ -z "$wid" || -z "$ws" ]] && continue
+    # Only move if window still exists and not already on correct workspace
+    cur_ws=$(/opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{workspace}' 2>/dev/null | awk -v id="$wid" '$1==id {print $2}')
+    if [[ -n "$cur_ws" && "$cur_ws" != "$ws" ]]; then
+      /opt/homebrew/bin/aerospace move-node-to-workspace "$ws" --window-id "$wid" >/dev/null 2>&1 || true
+      echo "$(date '+%Y-%m-%d %H:%M:%S') restore: window $wid $cur_ws→$ws" >> /tmp/display-center.log 2>&1
+    fi
+  done < /tmp/aerospace-sleep-state
+fi
+# display-center already recenters VNC via its own function, but double-check via aerospace+osascript
+sleep 1
+if pgrep -x "Screen Sharing" >/dev/null 2>&1; then
+  if /opt/homebrew/bin/aerospace list-windows --all --format '%{window-title}' 2>&1 | grep -q "Mac mini"; then
+    # display-aware: DELL vs Air (display-center already did this, but double-check)
+    if displayplacer list 2>&1 | grep -q "27 inch external screen"; then
+      exp_x=-225; exp_y=-1286; exp_w=1920; exp_h=1132
+    elif displayplacer list 2>&1 | grep -q "external screen"; then
+      exp_x=-225; exp_y=-1286; exp_w=1920; exp_h=1132
+    else
+      cnt=$(displayplacer list 2>&1 | grep -c "Persistent screen id:" || true)
+      if [[ "$cnt" -gt 1 ]]; then
+        exp_x=-225; exp_y=-1286; exp_w=1920; exp_h=1132
+      else
+        exp_x=0; exp_y=39; exp_w=1470; exp_h=878
+      fi
+    fi
+    osascript -e "tell application \"Screen Sharing\" to try
+      set position of window 1 to {$exp_x, $exp_y}
+      set size of window 1 to {$exp_w, $exp_h}
+    end try" >/dev/null 2>&1 || true
+    osascript -e "tell application \"System Events\" to tell process \"Screen Sharing\" to try
+      tell window 1
+        set position to {$exp_x, $exp_y}
+        set size to {$exp_w, $exp_h}
+      end tell
+    end try" >/dev/null 2>&1 || true
+    wid=$(/opt/homebrew/bin/aerospace list-windows --all --format '%{window-id} %{app-name}' 2>&1 | grep "Screen Sharing" | awk '{print $1}' | head -n1)
+    if [[ -n "$wid" ]]; then
+      /opt/homebrew/bin/aerospace layout floating --window-id "$wid" >/dev/null 2>&1 || true
+      /opt/homebrew/bin/aerospace move-node-to-workspace 10 --window-id "$wid" >/dev/null 2>&1 || true
+    fi
+  fi
+fi
+echo "$(date '+%Y-%m-%d %H:%M:%S') wakeup: display re-centered, VNC repositioned" >> /tmp/display-center.log

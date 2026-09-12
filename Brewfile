@@ -1,6 +1,8 @@
 tap "nikitabobko/tap"
 # GNU File, Shell, and Text utilities
 brew "coreutils"
+# Utility to configure multi-display resolutions and arrangements
+brew "displayplacer"
 # Simple, fast and user-friendly alternative to find
 brew "fd"
 # GitHub command-line tool
@@ -22,3 +24,6 @@ cask "nikitabobko/tap/aerospace", trusted: true
 cask "font-jetbrains-mono-nerd-font"
 # Terminal emulator that uses platform-native UI and GPU acceleration
 cask "ghostty"
+# System-level keyboard remapper — prevents Aerospce key bleed into apps
+cask "karabiner-elements"
+brew "sleepwatcher"
