@@ -9,8 +9,8 @@ fi
 raw_phone="$1"; shift; body="$*"
 phone="$(echo "$raw_phone" | tr -d ' -()')"
 if [[ "$phone" =~ ^[0-9]{10}$ ]]; then phone="+1$phone"; elif [[ "$phone" =~ ^1[0-9]{10}$ ]]; then phone="+$phone"; fi
-# Try iMessage first, then SMS
-osascript 2>&1 <<EOF
+# Try iMessage first, then SMS - capture result to decide quit
+result="$(osascript 2>&1 <<EOF
 tell application "Messages"
   try
     set svc to 1st service whose service type = iMessage
@@ -27,3 +27,16 @@ tell application "Messages"
   end try
 end tell
 EOF
+)"
+echo "$result"
+# Stay logged in but quiet: quit app after successful send (keeps ZACTIVE 1, notifications OFF)
+if echo "$result" | grep -q "^sent "; then
+  sleep 0.5
+  osascript -e 'tell application "Messages" to quit' >/dev/null 2>&1 || true
+  # Also ensure background agents don't keep window open
+  sleep 0.2
+fi
+# Propagate failure
+if echo "$result" | grep -q "^failed:"; then
+  exit 1
+fi
