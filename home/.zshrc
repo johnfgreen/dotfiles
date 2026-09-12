@@ -1,7 +1,9 @@
 export PATH=/Users/john/.opencode/bin:$PATH
 
-# Dotfiles & worktree management
+# Dotfiles & worktree management — bin/ on PATH via ~/Projects/dotfiles/bin and ~/.local/bin (symlinked by install.sh)
 export PATH="$HOME/Projects/dotfiles/bin:$PATH"
+# Messaging helpers (also symlinked to ~/.local/bin via install.sh)
+export PATH="$HOME/.local/bin:$PATH"
 alias wts='worktree-session'
 alias wtsl='worktree-session list'
 alias wtso='worktree-session open'
@@ -12,6 +14,12 @@ alias wtm='worktree-manager'
 alias vnc-mini='open vnc://100.125.111.112'
 alias vnc-mini-magic='open vnc://johns-mac-mini.tail236725.ts.net'
 alias vnc-mini-short='open vnc://johns-mac-mini'
+
+# Messaging — Mac Messages helpers (see bin/sms* and README.md Messaging)
+# sms <phone> [msg]        -> draft via sms:// (manual Send)
+# sms-auto <phone> <msg>   -> auto-send via AppleScript (needs Automation perm)
+# sms-ondemand <phone> <msg> [--stay|--isolate] -> on-demand sign-in, stay by default
+# isolate-mac              -> disable Handoff/AirDrop/Continuity
 
 # opencode memory auto-routing
 # Sets OPCODE_AGENT based on --agent flag and current directory
