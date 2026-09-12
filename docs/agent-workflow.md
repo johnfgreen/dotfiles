@@ -199,10 +199,10 @@ System agent: wtm remove terminal
 
 ### Available agents
 
+These are the 3 active sub-agents (consolidated from 5 — `@agent-tmux` and `@agent-terminal` merged into `@agent-desktop`).
+
 | `@name` | Worktree | Configs |
 |---|---|---|
-| `@agent-tmux` | `dotfiles-agent-tmux` | tmux.conf |
-| `@agent-opencode` | `dotfiles-agent-opencode` | opencode.jsonc, agent prompts |
-| `@agent-bootstrap` | `dotfiles-agent-bootstrap` | install.sh, Brewfile, bin/ |
-| `@agent-terminal` | `dotfiles-agent-terminal` | Ghostty config |
-| `@agent-desktop` | `dotfiles-agent-desktop` | Aerospace, Neovim, .zshrc, .gitconfig |
+| `@agent-bootstrap` | `dotfiles-agent-bootstrap` | Brewfile, install.sh, helper scripts |
+| `@agent-desktop` | `dotfiles-agent-desktop` | Aerospace, Neovim, Zsh, Git, tmux & Ghostty config |
+| `@agent-opencode` | `dotfiles-agent-opencode` | opencode.jsonc, agent prompts, permissions |
