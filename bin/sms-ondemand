@@ -1,0 +1,105 @@
+#!/bin/bash
+# sms-ondemand - Send iMessage/SMS on-demand, signing in only when needed then optionally signing out
+# Usage: sms-ondemand <phone> <message> [--stay]
+#   --stay : stay signed in after sending (default: auto sign-out after 2 min prompt)
+# Privacy: one-time, does not store credentials or numbers
+set -euo pipefail
+
+phone_raw="${1:-}"; shift 2>/dev/null || true
+if [[ -z "$phone_raw" ]]; then
+  echo "Usage: sms-ondemand <phone> <message> [--stay]" >&2
+  echo "  Example: sms-ondemand 3233046084 \"Hello\"" >&2
+  exit 1
+fi
+
+# Handle --stay flag at end
+stay=0
+if [[ "${@: -1}" == "--stay" ]]; then
+  stay=1
+  set -- "${@:1:$(($#-1))}"
+fi
+body="$*"
+if [[ -z "$body" ]]; then
+  # phone was first arg, body is rest - already handled
+  body="$phone_raw"
+  phone_raw="$1"
+fi
+# Actually restructure: first arg is phone, rest is body
+# Re-parse correctly
+if [[ $# -ge 1 && -n "$phone_raw" ]]; then
+  # already have phone_raw, body is $*
+  :
+fi
+
+# Normalize phone
+phone="$(echo "$phone_raw" | tr -d ' -()')"
+if [[ "$phone" =~ ^[0-9]{10}$ ]]; then phone="+1$phone"
+elif [[ "$phone" =~ ^1[0-9]{10}$ ]]; then phone="+$phone"
+fi
+
+db="$HOME/Library/Accounts/Accounts4.sqlite"
+is_active() {
+  sqlite3 "$db" "SELECT ZACTIVE FROM ZACCOUNT WHERE ZACCOUNTTYPE=(SELECT Z_PK FROM ZACCOUNTTYPE WHERE ZACCOUNTTYPEDESCRIPTION='Messages') LIMIT 1" 2>/dev/null | grep -q "1"
+}
+
+# Check Messages sign-in status
+if ! is_active; then
+  echo "Messages is currently SIGNED OUT (isolated mode)." >&2
+  echo "Opening Messages - please sign in with your Apple ID (password + 2FA)..." >&2
+  open -a Messages 2>/dev/null || true
+  # Also open System Settings to Apple ID pane as fallback
+  sleep 1
+  echo "Waiting for sign-in (checking every 2s, timeout 120s)..." >&2
+  for i in $(seq 1 60); do
+    if is_active; then
+      echo "✓ Messages is now signed in" >&2
+      sleep 1
+      break
+    fi
+    sleep 2
+    if [[ $((i % 5)) -eq 0 ]]; then
+      echo "  Still waiting... ($((i*2))s) - sign in via Messages > Settings > iMessage" >&2
+    fi
+  done
+  if ! is_active; then
+    echo "Timed out waiting for sign-in. Please sign in manually via Messages > Settings > iMessage, then rerun." >&2
+    exit 1
+  fi
+else
+  echo "Messages is signed in, proceeding..." >&2
+fi
+
+# Send via sms-auto if available, else via AppleScript directly
+if [[ -x "$HOME/Projects/dotfiles/bin/sms-auto" ]]; then
+  exec "$HOME/Projects/dotfiles/bin/sms-auto" "$phone" "$body"
+elif command -v sms-auto >/dev/null 2>&1; then
+  exec sms-auto "$phone" "$body"
+else
+  # Fallback inline
+  osascript 2>&1 <<EOF
+tell application "Messages"
+  try
+    set svc to 1st service whose service type = iMessage
+    send "$body" to buddy "$phone" of svc
+    return "sent iMessage"
+  on error
+    set svc2 to 1st service whose service type = SMS
+    send "$body" to buddy "$phone" of svc2
+    return "sent SMS"
+  end try
+end tell
+EOF
+fi
+
+# Auto sign-out logic (only if not --stay)
+if [[ $stay -eq 0 ]]; then
+  echo "" >&2
+  echo "Message sent. Isolate again? Sign out of Messages in 10s... Ctrl-C to stay signed in." >&2
+  for i in 10 9 8 7 6 5 4 3 2 1; do echo -n "$i " >&2; sleep 1; done; echo "" >&2
+  # Check if user pressed Ctrl-C (trap would exit), otherwise sign out
+  sqlite3 "$db" "UPDATE ZACCOUNT SET ZACTIVE=0, ZAUTHENTICATED=0 WHERE ZACCOUNTTYPE=(SELECT Z_PK FROM ZACCOUNTTYPE WHERE ZACCOUNTTYPEDESCRIPTION='Messages')" 2>/dev/null || true
+  killall imagent 2>/dev/null || true
+  killall accountsd 2>/dev/null || true
+  pkill -x Messages 2>/dev/null || true
+  echo "Messages signed out again (isolated)." >&2
+fi

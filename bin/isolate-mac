@@ -1,0 +1,24 @@
+#!/bin/bash
+# isolate-mac - Harden Mac for isolation (disable Handoff/AirDrop/Continuity, keep Apple ID for as-needed)
+# Idempotent - run anytime to re-apply
+set -euo pipefail
+uuid=$(system_profiler SPHardwareDataType 2>&1 | awk '/Hardware UUID/ {print $3}')
+echo "Isolating Mac $uuid..."
+# Handoff
+defaults -currentHost write com.apple.coreservices.useractivityd ActivityReceivingAllowed -bool false
+defaults -currentHost write com.apple.coreservices.useractivityd ActivityAdvertisingAllowed -bool false
+# AirDrop/Continuity
+defaults write com.apple.NetworkBrowser DisableAirDrop -bool true
+defaults write com.apple.applicationaccess allowAirDrop -bool false
+defaults write com.apple.applicationaccess allowAirPlay -bool false
+# Kill daemons to apply
+killall sharingd 2>/dev/null || true
+killall ControlCenter 2>/dev/null || true
+echo "✓ Handoff/AirDrop/Continuity disabled"
+echo "  Verify: System Settings > General > AirDrop & Handoff -> Handoff OFF, AirDrop Receiving Off"
+# Messages isolation (optional)
+if sqlite3 ~/Library/Accounts/Accounts4.sqlite "SELECT ZACTIVE FROM ZACCOUNT WHERE ZACCOUNTTYPE=(SELECT Z_PK FROM ZACCOUNTTYPE WHERE ZACCOUNTTYPEDESCRIPTION='Messages') LIMIT 1" 2>/dev/null | grep -q "1"; then
+  echo "  Messages is currently SIGNED IN - run: sqlite3 ~/Library/Accounts/Accounts4.sqlite \"UPDATE ZACCOUNT SET ZACTIVE=0 WHERE ZACCOUNTTYPE=(SELECT Z_PK FROM ZACCOUNTTYPE WHERE ZACCOUNTTYPEDESCRIPTION='Messages')\" to sign out"
+else
+  echo "  Messages is SIGNED OUT (isolated) - use sms-ondemand to send as needed"
+fi
