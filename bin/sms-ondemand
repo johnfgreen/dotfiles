@@ -1,34 +1,34 @@
 #!/bin/bash
 # sms-ondemand - Send iMessage/SMS on-demand, signing in only when needed then optionally signing out
-# Usage: sms-ondemand <phone> <message> [--stay]
-#   --stay : stay signed in after sending (default: auto sign-out after 2 min prompt)
+# Usage: sms-ondemand <phone> <message> [--stay|--isolate]
+#   --stay : stay signed in after sending (default: stay logged in but quiet)
+#   --isolate : sign out after sending (isolated mode)
 # Privacy: one-time, does not store credentials or numbers
 set -euo pipefail
 
-phone_raw="${1:-}"; shift 2>/dev/null || true
-if [[ -z "$phone_raw" ]]; then
-  echo "Usage: sms-ondemand <phone> <message> [--stay]" >&2
-  echo "  Example: sms-ondemand 3233046084 \"Hello\"" >&2
-  exit 1
-fi
-
-# Handle --stay flag at end
-stay=0
+# Detect --stay/--isolate flags first (before phone): default stay=1 (stay logged in but quiet)
+stay=1
 if [[ "${@: -1}" == "--stay" ]]; then
   stay=1
   set -- "${@:1:$(($#-1))}"
+elif [[ "${@: -1}" == "--isolate" ]]; then
+  stay=0
+  set -- "${@:1:$(($#-1))}"
 fi
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: sms-ondemand <phone> <message> [--stay|--isolate]" >&2
+  echo "  Example: sms-ondemand 3233046084 \"Hello\" --stay" >&2
+  exit 1
+fi
+
+phone_raw="$1"; shift
 body="$*"
+
 if [[ -z "$body" ]]; then
-  # phone was first arg, body is rest - already handled
-  body="$phone_raw"
-  phone_raw="$1"
-fi
-# Actually restructure: first arg is phone, rest is body
-# Re-parse correctly
-if [[ $# -ge 1 && -n "$phone_raw" ]]; then
-  # already have phone_raw, body is $*
-  :
+  echo "Usage: sms-ondemand <phone> <message> [--stay|--isolate]" >&2
+  echo "  Example: sms-ondemand 3233046084 \"Hello\"" >&2
+  exit 1
 fi
 
 # Normalize phone
@@ -77,13 +77,16 @@ else
 fi
 
 # Send via sms-auto if available, else via AppleScript directly
-if [[ -x "$HOME/Projects/dotfiles/bin/sms-auto" ]]; then
-  exec "$HOME/Projects/dotfiles/bin/sms-auto" "$phone" "$body"
-elif command -v sms-auto >/dev/null 2>&1; then
-  exec sms-auto "$phone" "$body"
-else
-  # Fallback inline
-  osascript 2>&1 <<EOF
+# When stay==1 (default) we stay logged in; when stay==0 (--isolate) we sign out after.
+if [[ $stay -eq 0 ]]; then
+  # --isolate: send then sign out (do not exec, so sign-out logic can run)
+  if [[ -x "$HOME/Projects/dotfiles/bin/sms-auto" ]]; then
+    "$HOME/Projects/dotfiles/bin/sms-auto" "$phone" "$body"
+  elif command -v sms-auto >/dev/null 2>&1; then
+    sms-auto "$phone" "$body"
+  else
+    # Fallback inline
+    osascript 2>&1 <<EOF
 tell application "Messages"
   try
     set svc to 1st service whose service type = iMessage
@@ -96,17 +99,32 @@ tell application "Messages"
   end try
 end tell
 EOF
-fi
-
-# Auto sign-out logic (only if not --stay)
-if [[ $stay -eq 0 ]]; then
-  echo "" >&2
-  echo "Message sent. Isolate again? Sign out of Messages in 10s... Ctrl-C to stay signed in." >&2
-  for i in 10 9 8 7 6 5 4 3 2 1; do echo -n "$i " >&2; sleep 1; done; echo "" >&2
-  # Check if user pressed Ctrl-C (trap would exit), otherwise sign out
+  fi
   sqlite3 "$db" "UPDATE ZACCOUNT SET ZACTIVE=0, ZAUTHENTICATED=0 WHERE ZACCOUNTTYPE=(SELECT Z_PK FROM ZACCOUNTTYPE WHERE ZACCOUNTTYPEDESCRIPTION='Messages')" 2>/dev/null || true
   killall imagent 2>/dev/null || true
   killall accountsd 2>/dev/null || true
   pkill -x Messages 2>/dev/null || true
   echo "Messages signed out again (isolated)." >&2
+else
+  echo "Staying signed in (phone-only, notifications off)" >&2
+  if [[ -x "$HOME/Projects/dotfiles/bin/sms-auto" ]]; then
+    exec "$HOME/Projects/dotfiles/bin/sms-auto" "$phone" "$body"
+  elif command -v sms-auto >/dev/null 2>&1; then
+    exec sms-auto "$phone" "$body"
+  else
+    # Fallback inline
+    osascript 2>&1 <<EOF
+tell application "Messages"
+  try
+    set svc to 1st service whose service type = iMessage
+    send "$body" to buddy "$phone" of svc
+    return "sent iMessage"
+  on error
+    set svc2 to 1st service whose service type = SMS
+    send "$body" to buddy "$phone" of svc2
+    return "sent SMS"
+  end try
+end tell
+EOF
+  fi
 fi
