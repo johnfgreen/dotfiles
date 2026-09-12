@@ -13,6 +13,7 @@ Personal macOS dotfiles that bootstrap a complete development machine — from z
 | **Shell** | Zsh | macOS default shell with custom `.zshrc` |
 | **AI agent** | [OpenCode](https://opencode.ai) | AI coding agent for ongoing system management |
 | **Keyboard** | [Karabiner-Elements](https://karabiner-elements.pqrs.org) | Key remapping (fixes AeroSpace key bleed) |
+| **Messaging** | Messages.app + `bin/sms*` | iMessage/SMS automation (privacy-first drafts, auto-send, on-demand sign-in, Handoff isolation) |
 
 All managed through a **multi-agent worktree system**: OpenCode delegates config changes to specialized sub-agents, each working in its own git worktree branch. Changes stay isolated until reviewed and merged.
 
@@ -103,7 +104,7 @@ opencode --version
 ~/Projects/dotfiles/install.sh
 ```
 
-This creates symlinks for all config files under `~/Projects/dotfiles/` to their standard locations (e.g. `~/.zshrc`, `~/.config/ghostty/config.ghostty`, etc.). It also symlinks the OpenCode memory tools (`opencode-memory` and `todo-manager`) into `~/.config/opencode/bin/`. Existing files are backed up with a `.bak` suffix.
+This creates symlinks for all config files under `~/Projects/dotfiles/` to their standard locations (e.g. `~/.zshrc`, `~/.config/ghostty/config.ghostty`, etc.). It also symlinks the OpenCode memory tools (`opencode-memory` and `todo-manager`) into `~/.config/opencode/bin/` and the messaging helpers (`sms`, `sms-auto`, `sms-ondemand`, `isolate-mac`) into `~/.local/bin/`. `~/Projects/dotfiles/bin` is also added to `PATH` via `.zshrc`, so helpers work even without symlinks. Existing files are backed up with a `.bak` suffix.
 
 #### 7. Apply macOS system defaults
 
@@ -198,6 +199,36 @@ Each sub-agent works in its own git worktree branch, so changes are isolated and
 
 ---
 
+## Messaging (Messages.app)
+
+Privacy-first helpers for iMessage/SMS without storing numbers or bodies. All live in `bin/` and are on `PATH` via `~/Projects/dotfiles/bin` + symlinked to `~/.local/bin` by `install.sh`.
+
+| Helper | Usage | What it does | Permissions |
+|---|---|---|---|
+| `sms` | `sms <phone> [msg]` | Opens Messages draft via `sms://` — **you hit Send**. URL-encodes body with `python3`, brings Messages frontmost. Fallback: `pbcopy`. | None — works out of the box |
+| `sms-auto` | `sms-auto <phone> <msg>` | Auto-sends via AppleScript (`iMessage` then `SMS` fallback). One-shot, no storage. | System Settings → Privacy → Automation → allow Terminal/Ghostty to control Messages |
+| `sms-ondemand` | `sms-ondemand <phone> <msg> [--stay\|--isolate]` | On-demand iMessage: checks `Accounts4.sqlite ZACTIVE`, prompts sign-in if needed (polls 60×2s, opens Settings → iMessage), then delegates to `sms-auto`. Default is `--stay` (stay logged in phone-only, notifications off). `--isolate` signs out after send (`UPDATE ZACTIVE=0`, kill `imagent`/`accountsd`). | Same as `sms-auto` + sqlite read |
+| `isolate-mac` | `isolate-mac` | Hardens isolation: `defaults -currentHost ActivityReceiving/Advertising false`, `DisableAirDrop true`, `allowAirDrop/allowAirPlay false`, kills `sharingd`/`ControlCenter`. Reports Messages `ZACTIVE`. Idempotent. | None |
+
+**Defaults (current): stay logged in but quiet**
+- Messages: signed in, phone-only (`+1 323...` checked, emails unchecked), app quit, `ZACTIVE 1`
+- Notifications: System Settings → Notifications → Messages → **Allow = OFF** (grey, all sub-toggles off)
+- Handoff/AirDrop/Continuity: **OFF** via `isolate-mac`
+
+**Choosing a helper**
+
+```bash
+sms 3233046084 "Hello"              # draft, hit Send
+sms-auto 3233046084 "Hello"          # auto-send now
+sms-ondemand 3233046084 "Hello"      # stay signed in (default)
+sms-ondemand 3233046084 "Hello" --isolate  # sign out after send
+isolate-mac                          # re-apply Handoff/AirDrop off
+```
+
+> **Privacy:** no phone numbers or bodies are logged/persisted — one-time sends only. For plain language like “send to 323...” the agent prefers `sms-auto`.
+
+---
+
 ## Architecture
 
 ### Keyboard event pipeline
@@ -255,4 +286,8 @@ Each sub-agent operates in its own parallel git worktree, allowing multiple agen
 | `Brewfile` | — | Homebrew package manifest |
 | `bin/opencode-memory` | `~/.config/opencode/bin/opencode-memory` | Cross-session memory tool for OpenCode |
 | `bin/todo-manager` | `~/.config/opencode/bin/todo-manager` | Task sync helper wrapping opencode-memory |
+| `bin/sms` | `~/.local/bin/sms` + `PATH` | Messages draft via `sms://` (manual Send) |
+| `bin/sms-auto` | `~/.local/bin/sms-auto` + `PATH` | Auto-send via AppleScript (iMessage→SMS) |
+| `bin/sms-ondemand` | `~/.local/bin/sms-ondemand` + `PATH` | On-demand sign-in + delegate to `sms-auto` |
+| `bin/isolate-mac` | `~/.local/bin/isolate-mac` + `PATH` | Harden Handoff/AirDrop/Continuity off |
 | `install.sh` | — | Symlink creator |
