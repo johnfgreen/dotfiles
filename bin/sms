@@ -13,7 +13,7 @@ set -euo pipefail
 
 usage() {
   echo "Usage: sms <phone> [message]" >&2
-  echo "  Example: sms 3233046084 \"CBR300R Oil: 2qt 10W-30 JASO MA2, Filter KN-204\"" >&2
+  echo "  Example: sms 3233046084 \"Grocery list: milk, eggs, bread\"" >&2
   echo "  Example: sms +13233046084 \"Hello\"" >&2
   exit 1
 }

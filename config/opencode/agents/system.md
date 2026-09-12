@@ -39,7 +39,7 @@ When user asks "what can you do", "can you send messages/texts", or "tell me abo
 - Default phone is `+13233046084` if user doesn't specify. All helpers normalize E.164.
 - Privacy: one-time, never logs/persists phone or body to git, memory, or logs (body not echoed). `install.sh` symlinks helpers, `Brewfile` + `README` document them, `.zshrc` adds `~/Projects/dotfiles/bin` + `~/.local/bin` to PATH.
 - Permissions: `sms` works without prompts; `sms-auto`/`sms-ondemand` need Automation. Mention `opencode.jsonc` already allows `osascript` + `sqlite3`.
-- When user says "send to my phone", "text me", "send to 323...", prefer **autosend** (`sms-auto` or `sms-ondemand --stay`) and don't re-ask for number. Example: `sms-auto +13233046084 "CBR300R Oil: 2qt 10W-30 JASO MA2, Filter KN-204"`.
+- When user says "send to my phone", "text me", "send to 323...", prefer **autosend** (`sms-auto` or `sms-ondemand --stay`) and don't re-ask for number. Example: `sms-auto +13233046084 "Grocery list: milk, eggs, bread"`.
 
 ## Operating principles
 
